@@ -1561,6 +1561,7 @@ function stripInternalFields(rec) {
   const clean = { ...rec };
   delete clean._searchText;
   delete clean._nameSearchText;
+  delete clean._docId;
   return clean;
 }
 
@@ -1876,6 +1877,7 @@ function startRealtimeSync() {
         .map(docSnap => {
           const raw = docSnap.data();
           if (raw._kind === 'permission_next_auth') return null;
+          raw._docId = docSnap.id;
           if (raw.id === undefined || raw.id === null || raw.id === '') raw.id = docSnap.id;
           return normalizeBuildingRecord(raw);
         })
@@ -2353,7 +2355,7 @@ const layerGroup = (L.markerClusterGroup ? L.markerClusterGroup({
 }) : L.layerGroup()).addTo(map);
 
 function openDrawerById(id) {
-  const r = DATA.find(d => String(d.id) === String(id));
+  const r = DATA.find(d => String(d._docId || '') === String(id) || String(d.id) === String(id));
   map.closePopup();
   if (r) window.openDrawer(r);
 }
@@ -2681,12 +2683,13 @@ function collectOtherFees() {
 function findDuplicateBuilding(payload, existingId) {
   const nameTh = normalizeDuplicateValue(payload.name_th);
   const nameEng = normalizeDuplicateValue(payload.name_eng);
+  const currentId = String(existingId || '');
   const hasCoords = Number.isFinite(payload.lat) && Number.isFinite(payload.lng);
   const lat = hasCoords ? payload.lat.toFixed(6) : '';
   const lng = hasCoords ? payload.lng.toFixed(6) : '';
 
   return DATA.find(item => {
-    if (String(item.id) === String(existingId || '')) return false;
+    if (currentId && (String(item._docId || '') === currentId || String(item.id || '') === currentId)) return false;
 
     const sameThaiName = nameTh && normalizeDuplicateValue(item.name_th) === nameTh;
     const sameEnglishName = nameEng && normalizeDuplicateValue(item.name_eng) === nameEng;
@@ -2712,7 +2715,7 @@ function openBuildingEditor(record = null) {
 
   form.reset();
   clearBuildingEditorInvalidState(form);
-  form.elements['record_id'].value = record?.id ?? '';
+  form.elements['record_id'].value = record?._docId ?? record?.id ?? '';
   form.elements['name_th'].value = record?.name_th ?? '';
   form.elements['name_eng'].value = record?.name_eng ?? '';
   form.elements['status'].value = record?.status ?? 'Check Permission';
@@ -2767,7 +2770,7 @@ async function deleteBuildingFromForm(form) {
   const id = form?.elements['record_id']?.value;
   if (!id) return;
 
-  const record = DATA.find(d => String(d.id) === String(id));
+  const record = DATA.find(d => String(d._docId || '') === String(id) || String(d.id) === String(id));
   const buildingName = record?.name_th || record?.name_eng || `ID ${id}`;
   const confirmed = confirm(`ต้องการลบข้อมูลอาคาร "${buildingName}" ใช่หรือไม่?`);
   if (!confirmed) return;
@@ -2791,13 +2794,16 @@ async function saveBuildingFromForm(form) {
   }
   const formData = new FormData(form);
   const existingId = formData.get('record_id');
+  const existingRecord = existingId ? DATA.find(item =>
+    String(item._docId || '') === String(existingId) || String(item.id || '') === String(existingId)
+  ) : null;
   clearBuildingEditorInvalidState(form);
 
   // รายการใหม่: ใช้ Firestore auto-generated ID เพื่อกันชนกันเวลามีหลายคนเพิ่มข้อมูลพร้อมกัน
   const recordId = existingId || window.FSDB.newId();
 
   const payload = normalizeBuildingRecord({
-    id: recordId,
+    id: existingRecord?.id ?? recordId,
     update_date: new Date().toISOString().slice(0, 10),
     name_th: String(formData.get('name_th') || '').trim(),
     name_eng: String(formData.get('name_eng') || '').trim(),
