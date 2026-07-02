@@ -1390,8 +1390,9 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
-    getFirestore, collection, doc, getDoc, setDoc, deleteDoc, onSnapshot,
-    writeBatch, getDocs, query, limit, enableIndexedDbPersistence
+    initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+    collection, doc, getDoc, setDoc, deleteDoc, onSnapshot,
+    writeBatch, getDocs, query, limit
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -1407,15 +1408,19 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
   const app = initializeApp(firebaseConfig);
   // ชื่อฐานข้อมูล Firestore: "permission-building" (ต้องสร้างฐานข้อมูลนี้ไว้ล่วงหน้าใน Firebase Console
   // ที่ Databases & Storage > Firestore > Add database > Database ID = permission-building)
-  const db = getFirestore(app, "permission-building");
+  const db = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  }, "permission-building");
 
-  // เปิด offline cache ไว้ในเครื่อง เผื่อกรณีอินเทอร์เน็ตหลุดชั่วคราว (ยังใช้งานแอปต่อได้)
-  enableIndexedDbPersistence(db, { synchronizeTabs: true }).catch(err => {
-    console.warn('Firestore offline persistence ไม่สามารถเปิดได้:', err.code);
+  // ใช้ persistentLocalCache แทน enableIndexedDbPersistence() เพื่อลด warning deprecated ของ Firebase 10
+  window.addEventListener('unhandledrejection', event => {
+    if (String(event.reason?.message || '').includes('offline persistence')) {
+      console.warn('Firestore offline persistence ไม่สามารถเปิดได้:', event.reason?.code || event.reason);
+    }
   });
 
   const buildingsCol = collection(db, 'buildings');
-  const usersCol = collection(db, 'app_users');
+  const authDocRef = doc(buildingsCol, '__permission_next_auth__');
 
   // เปิด API ชุดเล็ก ๆ ให้สคริปต์หลัก (classic script) ของแอปเรียกใช้ผ่าน window.FSDB
   window.FSDB = {
@@ -1430,17 +1435,37 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
     setDoc: (id, data) => setDoc(doc(buildingsCol, String(id)), data, { merge: true }),
     deleteDoc: (id) => deleteDoc(doc(buildingsCol, String(id))),
     onSnapshot: (onNext, onError) => onSnapshot(buildingsCol, onNext, onError),
+    async getAuthUsers() {
+      const snap = await getDoc(authDocRef);
+      const data = snap.exists() ? snap.data() : {};
+      return Array.isArray(data.users) ? data.users : [];
+    },
+    setAuthUsers: (users) => setDoc(authDocRef, {
+      _kind: 'permission_next_auth',
+      users,
+      updated_at: new Date().toISOString()
+    }, { merge: true }),
+    onAuthSnapshot: (onNext, onError) => onSnapshot(authDocRef, snap => {
+      const data = snap.exists() ? snap.data() : {};
+      onNext(Array.isArray(data.users) ? data.users : []);
+    }, onError),
     async getUser(email) {
-      const snap = await getDoc(doc(usersCol, String(email).toLowerCase()));
-      return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+      const cleanEmail = String(email).toLowerCase();
+      const users = await this.getAuthUsers();
+      return users.find(user => String(user.email || '').toLowerCase() === cleanEmail) || null;
     },
-    async isUsersEmpty() {
-      const snap = await getDocs(query(usersCol, limit(1)));
-      return snap.empty;
+    async setUser(email, data) {
+      const cleanEmail = String(email).toLowerCase();
+      const users = await this.getAuthUsers();
+      const nextUsers = users.filter(user => String(user.email || '').toLowerCase() !== cleanEmail);
+      nextUsers.push({ ...data, email: cleanEmail });
+      await this.setAuthUsers(nextUsers);
     },
-    setUser: (email, data) => setDoc(doc(usersCol, String(email).toLowerCase()), data, { merge: true }),
-    deleteUser: (email) => deleteDoc(doc(usersCol, String(email).toLowerCase())),
-    onUsersSnapshot: (onNext, onError) => onSnapshot(usersCol, onNext, onError)
+    async deleteUser(email) {
+      const cleanEmail = String(email).toLowerCase();
+      const users = await this.getAuthUsers();
+      await this.setAuthUsers(users.filter(user => String(user.email || '').toLowerCase() !== cleanEmail));
+    }
   };
 
   window.dispatchEvent(new Event('fsdb-ready'));
@@ -1618,9 +1643,8 @@ function setCurrentUser(user) {
 }
 
 async function ensureDefaultAdminUser() {
-  const isEmpty = await window.FSDB.isUsersEmpty();
   const existingAdmin = await window.FSDB.getUser(DEFAULT_ADMIN.email);
-  if (!isEmpty && existingAdmin) return;
+  if (existingAdmin) return;
   await window.FSDB.setUser(DEFAULT_ADMIN.email, {
     email: DEFAULT_ADMIN.email,
     role: DEFAULT_ADMIN.role,
@@ -1633,9 +1657,9 @@ async function ensureDefaultAdminUser() {
 
 function startUsersSync() {
   if (usersUnsub) usersUnsub();
-  usersUnsub = window.FSDB.onUsersSnapshot(
-    snapshot => {
-      APP_USERS = snapshot.docs.map(docSnap => sanitizeUser({ id: docSnap.id, ...docSnap.data() }))
+  usersUnsub = window.FSDB.onAuthSnapshot(
+    users => {
+      APP_USERS = users.map(sanitizeUser)
         .filter(Boolean)
         .sort((a, b) => a.email.localeCompare(b.email));
       renderUserAdminList();
@@ -1808,11 +1832,14 @@ function startRealtimeSync() {
   if (firestoreUnsub) firestoreUnsub();
   firestoreUnsub = window.FSDB.onSnapshot(
     snapshot => {
-      DATA = snapshot.docs.map(docSnap => {
-        const raw = docSnap.data();
-        if (raw.id === undefined || raw.id === null || raw.id === '') raw.id = docSnap.id;
-        return normalizeBuildingRecord(raw);
-      });
+      DATA = snapshot.docs
+        .map(docSnap => {
+          const raw = docSnap.data();
+          if (raw._kind === 'permission_next_auth') return null;
+          if (raw.id === undefined || raw.id === null || raw.id === '') raw.id = docSnap.id;
+          return normalizeBuildingRecord(raw);
+        })
+        .filter(Boolean);
       setSyncStatus('ซิงค์ล่าสุด ' + new Date().toLocaleTimeString('th-TH'));
       applyFilters();
     },
