@@ -7,3 +7,10 @@ Test.html
 Thumbs.db
 *.tmp
 *.bak
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
