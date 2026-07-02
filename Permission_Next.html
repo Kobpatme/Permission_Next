@@ -3152,9 +3152,14 @@ function calculateQuotation() {
     qty: item.note || '1 ครั้ง'
   }));
 
-  // ค่าใช้จ่ายอาคาร: รวมทุกอย่าง ยกเว้นค่าประกัน (Insurance)
+  // ค่าใช้จ่ายอาคาร: รวมเฉพาะรายการที่ลูกค้าต้องชำระ ยกเว้นค่าประกัน (Insurance) และเงินประกันติดตั้ง (Deposit)
+  const depositFee = {
+    label: FEE_LABELS.damageDeposit,
+    value: Number(building.damage_deposit) || 0,
+    qty: '1 ครั้ง'
+  };
+  const nonPayableFees = depositFee.value > 0 ? [depositFee] : [];
   const buildingFees = [
-    { label: FEE_LABELS.damageDeposit,            value: Number(building.damage_deposit) || 0,  qty: '1 ครั้ง' },
     { label: FEE_LABELS.contractDeposit,          value: Number(building.contract_deposit) || 0, qty: '1 ครั้ง' },
     { label: FEE_LABELS.mainFee,                  value: Number(building.main_fee) || 0,        qty: '1 ครั้ง' },
     { label: FEE_LABELS.annualFee,                value: Number(building.annual_fee) || 0,      qty: '1 ครั้ง' },
@@ -3178,8 +3183,7 @@ function calculateQuotation() {
   document.getElementById('quotation-installation-subtotal').textContent = formatCurrency(installationSubtotal);
 
   const buildingFeesContainer = document.getElementById('quotation-building-fees');
-  if (buildingFeesTotal > 0) {
-    buildingFeesContainer.innerHTML = `
+  const buildingFeesHtml = buildingFeesTotal > 0 ? `
       <div class="quotation-calc-section">
         <span>ค่าธรรมเนียมอาคาร</span>
         <span>${formatCurrency(buildingFeesTotal)}</span>
@@ -3188,10 +3192,18 @@ function calculateQuotation() {
         <div class="quotation-calc-row">
           <span class="quotation-calc-label">${esc(f.label)}</span>
           <span class="quotation-calc-value">${formatCurrency(f.value)}</span>
-        </div>`).join('')}`;
-  } else {
-    buildingFeesContainer.innerHTML = '';
-  }
+        </div>`).join('')}` : '';
+  const nonPayableFeesHtml = nonPayableFees.length ? `
+      <div class="quotation-calc-section">
+        <span>รายการเงินประกันการติดตั้ง</span>
+        <span>ไม่นำไปรวม</span>
+      </div>
+      ${nonPayableFees.map(f => `
+        <div class="quotation-calc-row">
+          <span class="quotation-calc-label">${esc(f.label)}</span>
+          <span class="quotation-calc-value">${formatCurrency(f.value)}</span>
+        </div>`).join('')}` : '';
+  buildingFeesContainer.innerHTML = buildingFeesHtml + nonPayableFeesHtml;
 
   document.getElementById('quotation-total-cost').textContent = formatCurrency(totalCost);
 
@@ -3204,8 +3216,7 @@ function calculateQuotation() {
   document.getElementById('prev-installation-subtotal').textContent = formatCurrencyNumeric(installationSubtotal) + ' บาท';
 
   const prevBuildingFeesContainer = document.getElementById('prev-building-fees-table');
-  if (buildingFeesTotal > 0) {
-    prevBuildingFeesContainer.innerHTML = `
+  const buildingFeesPreviewHtml = buildingFeesTotal > 0 ? `
       <tr class="quotation-section-row">
         <td colspan="4">ค่าธรรมเนียมอาคาร</td>
       </tr>
@@ -3219,10 +3230,20 @@ function calculateQuotation() {
       <tr class="quotation-subtotal-row">
         <td colspan="3">รวมค่าธรรมเนียมอาคาร</td>
         <td class="quotation-amount">${formatCurrencyNumeric(buildingFeesTotal)} บาท</td>
-      </tr>`;
-  } else {
-    prevBuildingFeesContainer.innerHTML = '';
-  }
+      </tr>` : '';
+  const nonPayableStartIndex = 5 + buildingFees.length;
+  const nonPayableFeesPreviewHtml = nonPayableFees.length ? `
+      <tr class="quotation-section-row">
+        <td colspan="4">รายการเงินประกันการติดตั้ง</td>
+      </tr>
+      ${nonPayableFees.map((f, index) => `
+        <tr>
+          <td>${nonPayableStartIndex + index}</td>
+          <td>${esc(f.label)}</td>
+          <td>${esc(f.qty)}</td>
+          <td class="quotation-amount">${formatCurrencyNumeric(f.value)} บาท</td>
+        </tr>`).join('')}` : '';
+  prevBuildingFeesContainer.innerHTML = buildingFeesPreviewHtml + nonPayableFeesPreviewHtml;
 
   document.getElementById('prev-total').textContent = formatCurrencyNumeric(totalCost) + ' บาท';
 
