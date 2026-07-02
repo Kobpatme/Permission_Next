@@ -1420,7 +1420,7 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
   });
 
   const buildingsCol = collection(db, 'buildings');
-  const authDocRef = doc(buildingsCol, '__permission_next_auth__');
+  const authDocRef = doc(buildingsCol, 'permission_next_auth');
 
   // เปิด API ชุดเล็ก ๆ ให้สคริปต์หลัก (classic script) ของแอปเรียกใช้ผ่าน window.FSDB
   window.FSDB = {

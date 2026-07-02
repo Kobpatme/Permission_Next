@@ -22,7 +22,7 @@ Static dashboard for Cloudflare Pages.
 
 ## Basic Login
 
-The app includes a basic in-app login gate backed by the existing Firestore `buildings` collection, using the hidden document `__permission_next_auth__`. On first load, it seeds this admin account if missing:
+The app includes a basic in-app login gate backed by the existing Firestore `buildings` collection, using the hidden document `permission_next_auth`. On first load, it seeds this admin account if missing:
 
 - ID: `admin101@uih.co.th`
 - Password: `admin101`
