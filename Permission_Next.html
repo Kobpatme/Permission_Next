@@ -2683,13 +2683,13 @@ function collectOtherFees() {
 function findDuplicateBuilding(payload, existingId) {
   const nameTh = normalizeDuplicateValue(payload.name_th);
   const nameEng = normalizeDuplicateValue(payload.name_eng);
-  const currentId = String(existingId || '');
+  const currentIds = new Set([existingId, payload.id].filter(v => v !== null && v !== undefined && v !== '').map(String));
   const hasCoords = Number.isFinite(payload.lat) && Number.isFinite(payload.lng);
   const lat = hasCoords ? payload.lat.toFixed(6) : '';
   const lng = hasCoords ? payload.lng.toFixed(6) : '';
 
   return DATA.find(item => {
-    if (currentId && (String(item._docId || '') === currentId || String(item.id || '') === currentId)) return false;
+    if (currentIds.has(String(item._docId || '')) || currentIds.has(String(item.id || ''))) return false;
 
     const sameThaiName = nameTh && normalizeDuplicateValue(item.name_th) === nameTh;
     const sameEnglishName = nameEng && normalizeDuplicateValue(item.name_eng) === nameEng;
@@ -2701,6 +2701,23 @@ function findDuplicateBuilding(payload, existingId) {
 
     return sameThaiName || sameEnglishName || sameCoords;
   }) || null;
+}
+
+function duplicateSensitiveFieldsChanged(payload, existingRecord) {
+  if (!existingRecord) return true;
+  const sameNameTh = normalizeDuplicateValue(payload.name_th) === normalizeDuplicateValue(existingRecord.name_th);
+  const sameNameEng = normalizeDuplicateValue(payload.name_eng) === normalizeDuplicateValue(existingRecord.name_eng);
+  const payloadLat = Number(payload.lat);
+  const payloadLng = Number(payload.lng);
+  const existingLat = Number(existingRecord.lat);
+  const existingLng = Number(existingRecord.lng);
+  const sameLat = Number.isFinite(payloadLat) && Number.isFinite(existingLat)
+    ? payloadLat.toFixed(6) === existingLat.toFixed(6)
+    : payload.lat === existingRecord.lat;
+  const sameLng = Number.isFinite(payloadLng) && Number.isFinite(existingLng)
+    ? payloadLng.toFixed(6) === existingLng.toFixed(6)
+    : payload.lng === existingRecord.lng;
+  return !(sameNameTh && sameNameEng && sameLat && sameLng);
 }
 
 function openBuildingEditor(record = null) {
@@ -2845,7 +2862,9 @@ async function saveBuildingFromForm(form) {
     return;
   }
 
-  const duplicate = findDuplicateBuilding(payload, existingId);
+  const duplicate = duplicateSensitiveFieldsChanged(payload, existingRecord)
+    ? findDuplicateBuilding(payload, existingId)
+    : null;
   if (duplicate) {
     const duplicateName = duplicate.name_th || duplicate.name_eng || `ID ${duplicate.id}`;
     const duplicateMessage = `พบข้อมูลอาคารซ้ำในระบบ: ${duplicateName} กรุณาตรวจสอบชื่ออาคารหรือพิกัดก่อนบันทึก`;
