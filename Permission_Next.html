@@ -1139,7 +1139,14 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
   border:1px solid color-mix(in oklab, var(--accent) 25%, transparent);
   border-radius:12px; padding:18px; margin:22px 0;
 }
-.quotation-calc-row{display:flex; justify-content:space-between; margin:8px 0; font-size:13px;}
+.quotation-calc-section{
+  display:flex; justify-content:space-between; align-items:center;
+  margin:12px 0 8px; padding:8px 0;
+  border-top:1px solid var(--border);
+  font-size:12px; font-weight:800; color:var(--text);
+}
+.quotation-calc-section:first-child{border-top:none; margin-top:0; padding-top:0;}
+.quotation-calc-row{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:14px; margin:8px 0; font-size:13px;}
 .quotation-calc-label{color:var(--text2); font-weight:500;}
 .quotation-calc-value{color:var(--text); font-weight:700; font-variant-numeric:tabular-nums;}
 .quotation-total-row{
@@ -1208,6 +1215,14 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 .quotation-preview-table th{padding:10px; text-align:left; font-weight:700; letter-spacing:.3px;}
 .quotation-preview-table td{padding:9px 10px; border-bottom:1px solid #e5e7eb;}
 .quotation-preview-table tbody tr:nth-child(even){background:#f8fafc;}
+.quotation-preview-table .quotation-section-row td{
+  background:#eef2ff; color:#1e40af; font-weight:800;
+  border-top:1px solid #c7d2fe; border-bottom:1px solid #c7d2fe;
+}
+.quotation-preview-table .quotation-subtotal-row td{
+  background:#f8fafc; font-weight:800; border-top:1px solid #cbd5e1;
+}
+.quotation-preview-table .quotation-subtotal-row td:first-child{text-align:right; color:#475569;}
 .quotation-amount{text-align:right; font-weight:700; font-variant-numeric:tabular-nums;}
 .quotation-preview-summary{margin:22px 0; border-top:1px solid #e5e7eb; padding-top:16px;}
 .quotation-summary-row{display:flex; justify-content:space-between; margin:6px 0; font-size:11px;}
@@ -1579,6 +1594,16 @@ const ROLE_LABELS = {
   permission: 'Permission',
   sale: 'Sale'
 };
+const FEE_LABELS = {
+  damageDeposit: 'เงินประกันติดตั้ง (Deposit)',
+  contractDeposit: 'ค่ามัดจำสัญญา (Contract Deposit)',
+  insurance: 'ค่าประกัน (Insurance)',
+  mainFee: 'ค่าธรรมเนียม (Main Fee)',
+  annualFee: 'ค่าบริการรายปี (Annual Fee)',
+  coordinationFee: 'ค่าธรรมเนียมประสานงาน (Coordination Fee)',
+  closure: 'ค่า ODF',
+  splice: 'ค่า Splice'
+};
 
 let APP_USERS = [];
 let usersUnsub = null;
@@ -1622,14 +1647,16 @@ async function passwordHash(email, password) {
 
 function readSavedSession() {
   try {
-    return JSON.parse(localStorage.getItem(AUTH_SESSION_KEY) || 'null');
+    localStorage.removeItem(AUTH_SESSION_KEY);
+    return JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY) || 'null');
   } catch {
     return null;
   }
 }
 
 function saveSession(user) {
-  localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({
+  localStorage.removeItem(AUTH_SESSION_KEY);
+  sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({
     email: user.email,
     role: user.role,
     display_name: user.display_name || '',
@@ -1638,6 +1665,7 @@ function saveSession(user) {
 }
 
 function clearSession() {
+  sessionStorage.removeItem(AUTH_SESSION_KEY);
   localStorage.removeItem(AUTH_SESSION_KEY);
 }
 
@@ -2262,12 +2290,12 @@ function openDrawer(r) {
 
   // Tab: Fee
   const standardFeeRows = [
-    ['ค่าเสียหาย (Damage Deposit)', r.damage_deposit],
-    ['ค่ามัดจำสัญญา (Contract Deposit)', r.contract_deposit],
-    ['ค่าประกัน (Insurance)', r.insurance_fee],
-    ['ค่าหลัก (Main Fee)', r.main_fee],
-    ['ค่าบริการรายปี (Annual Fee)', r.annual_fee],
-    ['ค่าประสานงาน (Coordination)', r.coordination_fee],
+    [FEE_LABELS.damageDeposit, r.damage_deposit],
+    [FEE_LABELS.contractDeposit, r.contract_deposit],
+    [FEE_LABELS.insurance, r.insurance_fee],
+    [FEE_LABELS.mainFee, r.main_fee],
+    [FEE_LABELS.annualFee, r.annual_fee],
+    [FEE_LABELS.coordinationFee, r.coordination_fee],
     ['ค่า Shaft ต่อชั้น', r.shaft_fee_per_floor],
     ['ค่าวางสาย Horizontal /ม.', r.horizontal_fee],
   ].filter(([,v]) => v !== null && v !== undefined && v !== 0 && v !== '');
@@ -3094,7 +3122,7 @@ function calculateQuotation() {
   // ===== COST CALCULATION =====
   const CABLE_RATE = 158.36;
   const EQUIPMENT_COST = 2200;
-  const CLOSURE_COST = 200;
+  const ODF_COST = 200;
   const SPLICE_COST = 400;
 
   const cableCost = totalCableDistance * CABLE_RATE;
@@ -3126,11 +3154,11 @@ function calculateQuotation() {
 
   // ค่าใช้จ่ายอาคาร: รวมทุกอย่าง ยกเว้นค่าประกัน (Insurance)
   const buildingFees = [
-    { label: 'ค่าเสียหาย (Damage Deposit)',       value: Number(building.damage_deposit) || 0,  qty: '1 ครั้ง' },
-    { label: 'ค่ามัดจำสัญญา (Contract Deposit)', value: Number(building.contract_deposit) || 0, qty: '1 ครั้ง' },
-    { label: 'ค่าหลัก (Main Fee)',                value: Number(building.main_fee) || 0,        qty: '1 ครั้ง' },
-    { label: 'ค่าบริการรายปี (Annual Fee)',       value: Number(building.annual_fee) || 0,      qty: '1 ครั้ง' },
-    { label: 'ค่าประสานงาน (Coordination)',       value: Number(building.coordination_fee) || 0, qty: '1 ครั้ง' },
+    { label: FEE_LABELS.damageDeposit,            value: Number(building.damage_deposit) || 0,  qty: '1 ครั้ง' },
+    { label: FEE_LABELS.contractDeposit,          value: Number(building.contract_deposit) || 0, qty: '1 ครั้ง' },
+    { label: FEE_LABELS.mainFee,                  value: Number(building.main_fee) || 0,        qty: '1 ครั้ง' },
+    { label: FEE_LABELS.annualFee,                value: Number(building.annual_fee) || 0,      qty: '1 ครั้ง' },
+    { label: FEE_LABELS.coordinationFee,          value: Number(building.coordination_fee) || 0, qty: '1 ครั้ง' },
     { label: `ค่า Shaft (${formatCurrencyNumeric(shaftRatePerFloor)} บ./ชั้น × ${floorDiff} ชั้น)`,
       value: shaftTotal, qty: `${floorDiff} ชั้น`, hidden: shaftRatePerFloor === 0 || floorDiff === 0 },
     { label: `ค่าวางสาย Horizontal ตามระยะสายรวม (${formatCurrencyNumeric(horizontalRatePerMeter)} บ./ม. × ${totalCableDistance} ม.)`,
@@ -3139,20 +3167,22 @@ function calculateQuotation() {
   ].filter(f => !f.hidden && f.value > 0);
 
   const buildingFeesTotal = buildingFees.reduce((a, f) => a + f.value, 0);
-  const totalCost = cableCost + EQUIPMENT_COST + CLOSURE_COST + SPLICE_COST + buildingFeesTotal;
+  const installationSubtotal = cableCost + EQUIPMENT_COST + ODF_COST + SPLICE_COST;
+  const totalCost = installationSubtotal + buildingFeesTotal;
 
   // ===== UPDATE FORM DISPLAY =====
   document.getElementById('quotation-cable-cost').textContent = formatCurrency(cableCost);
   document.getElementById('quotation-equipment-cost').textContent = formatCurrency(EQUIPMENT_COST);
-  document.getElementById('quotation-closure-cost').textContent = formatCurrency(CLOSURE_COST);
+  document.getElementById('quotation-closure-cost').textContent = formatCurrency(ODF_COST);
   document.getElementById('quotation-splice-cost').textContent = formatCurrency(SPLICE_COST);
+  document.getElementById('quotation-installation-subtotal').textContent = formatCurrency(installationSubtotal);
 
   const buildingFeesContainer = document.getElementById('quotation-building-fees');
   if (buildingFeesTotal > 0) {
     buildingFeesContainer.innerHTML = `
-      <div class="quotation-calc-row" style="font-weight:700; margin:10px 0 8px; padding:8px 0; border-top:1px solid var(--border);">
-        <span class="quotation-calc-label">ค่าธรรมเนียมอาคาร</span>
-        <span class="quotation-calc-value">${formatCurrency(buildingFeesTotal)}</span>
+      <div class="quotation-calc-section">
+        <span>ค่าธรรมเนียมอาคาร</span>
+        <span>${formatCurrency(buildingFeesTotal)}</span>
       </div>
       ${buildingFees.map(f => `
         <div class="quotation-calc-row">
@@ -3167,17 +3197,29 @@ function calculateQuotation() {
 
   // ===== UPDATE PREVIEW =====
   document.getElementById('prev-customer-name').textContent = customerName;
+  document.getElementById('prev-building-name').textContent = building.name_th || building.name_eng || '-';
+  document.getElementById('prev-customer-floor').textContent = `ชั้น ${custFloor}`;
   document.getElementById('prev-distance').textContent = `${totalCableDistance} ม. (แนวตั้ง ${verticalDistance} + แนวนอน ${hwireInput})`;
   document.getElementById('prev-cable-cost').textContent = formatCurrencyNumeric(cableCost) + ' บาท';
+  document.getElementById('prev-installation-subtotal').textContent = formatCurrencyNumeric(installationSubtotal) + ' บาท';
 
   const prevBuildingFeesContainer = document.getElementById('prev-building-fees-table');
   if (buildingFeesTotal > 0) {
-    prevBuildingFeesContainer.innerHTML = buildingFees.map(f => `
-      <tr>
-        <td>${esc(f.label)}</td>
-        <td>${esc(f.qty)}</td>
-        <td class="quotation-amount">${formatCurrencyNumeric(f.value)} บาท</td>
-      </tr>`).join('');
+    prevBuildingFeesContainer.innerHTML = `
+      <tr class="quotation-section-row">
+        <td colspan="4">ค่าธรรมเนียมอาคาร</td>
+      </tr>
+      ${buildingFees.map((f, index) => `
+        <tr>
+          <td>${index + 5}</td>
+          <td>${esc(f.label)}</td>
+          <td>${esc(f.qty)}</td>
+          <td class="quotation-amount">${formatCurrencyNumeric(f.value)} บาท</td>
+        </tr>`).join('')}
+      <tr class="quotation-subtotal-row">
+        <td colspan="3">รวมค่าธรรมเนียมอาคาร</td>
+        <td class="quotation-amount">${formatCurrencyNumeric(buildingFeesTotal)} บาท</td>
+      </tr>`;
   } else {
     prevBuildingFeesContainer.innerHTML = '';
   }
@@ -3302,6 +3344,7 @@ function resetQuotationForm(options = {}) {
   document.getElementById('quotation-equipment-cost').textContent = '2,200 บาท';
   document.getElementById('quotation-closure-cost').textContent = '200 บาท';
   document.getElementById('quotation-splice-cost').textContent = '400 บาท';
+  document.getElementById('quotation-installation-subtotal').textContent = '2,800 บาท';
   document.getElementById('quotation-building-fees').innerHTML = '';
   document.getElementById('quotation-total-cost').textContent = '2,800 บาท';
   document.getElementById('quotation-message').style.display = 'none';
@@ -3309,8 +3352,11 @@ function resetQuotationForm(options = {}) {
   document.getElementById('quotation-distance-summary').style.display = 'none';
   document.getElementById('quotation-shaft-info').style.display = 'none';
   document.getElementById('prev-customer-name').textContent = '-';
+  document.getElementById('prev-building-name').textContent = buildingData?.name_th || buildingData?.name_eng || '-';
+  document.getElementById('prev-customer-floor').textContent = '-';
   document.getElementById('prev-distance').textContent = '-';
   document.getElementById('prev-cable-cost').textContent = '-';
+  document.getElementById('prev-installation-subtotal').textContent = '2,800.00 บาท';
   document.getElementById('prev-building-fees-table').innerHTML = '';
   document.getElementById('prev-total').textContent = '-';
   window._quotationCalculated = false;
@@ -3597,6 +3643,10 @@ document.addEventListener('DOMContentLoaded', function() {
       </div>
       
       <div class="quotation-calc-display">
+        <div class="quotation-calc-section">
+          <span>ต้นทุนติดตั้ง</span>
+          <span id="quotation-installation-subtotal">2,800 บาท</span>
+        </div>
         <div class="quotation-calc-row">
           <span class="quotation-calc-label">ค่าติดตั้งสาย (OFC 2 Core)</span>
           <span class="quotation-calc-value" id="quotation-cable-cost">0 บาท</span>
@@ -3608,7 +3658,7 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
         
         <div class="quotation-calc-row">
-          <span class="quotation-calc-label">Closure</span>
+          <span class="quotation-calc-label">ค่า ODF</span>
           <span class="quotation-calc-value" id="quotation-closure-cost">200 บาท</span>
         </div>
         
@@ -3652,36 +3702,56 @@ document.addEventListener('DOMContentLoaded', function() {
             <h3>วันที่</h3>
             <p id="prev-date">-</p>
           </div>
+          <div class="quotation-preview-block">
+            <h3>ชื่ออาคาร</h3>
+            <p id="prev-building-name">-</p>
+          </div>
+          <div class="quotation-preview-block">
+            <h3>ชั้นลูกค้า</h3>
+            <p id="prev-customer-floor">-</p>
+          </div>
         </div>
         
         <table class="quotation-preview-table">
           <thead>
             <tr>
-              <th style="width: 50%;">รายการ</th>
-              <th style="width: 25%;">ปริมาณ</th>
-              <th style="width: 25%; text-align: right;">ราคารวม</th>
+              <th style="width: 9%;">ลำดับ</th>
+              <th style="width: 45%;">รายการ</th>
+              <th style="width: 21%;">ปริมาณ/หน่วย</th>
+              <th style="width: 25%; text-align: right;">จำนวนเงิน</th>
             </tr>
           </thead>
           <tbody>
+            <tr class="quotation-section-row">
+              <td colspan="4">ต้นทุนติดตั้ง</td>
+            </tr>
             <tr>
+              <td>1</td>
               <td>ค่าติดตั้งสาย (OFC 2 Core)</td>
               <td id="prev-distance">-</td>
               <td class="quotation-amount" id="prev-cable-cost">-</td>
             </tr>
             <tr>
+              <td>2</td>
               <td>ค่าติดตั้งอุปกรณ์</td>
               <td>1 ชุด</td>
               <td class="quotation-amount">2,200.00 บาท</td>
             </tr>
             <tr>
-              <td>Closure</td>
+              <td>3</td>
+              <td>ค่า ODF</td>
               <td>1 ชิ้น</td>
               <td class="quotation-amount">200.00 บาท</td>
             </tr>
             <tr>
+              <td>4</td>
               <td>ค่า Splice</td>
               <td>2 จุด</td>
               <td class="quotation-amount">400.00 บาท</td>
+            </tr>
+            <tr class="quotation-subtotal-row">
+              <td colspan="3">รวมต้นทุนติดตั้ง</td>
+              <td class="quotation-amount" id="prev-installation-subtotal">2,800.00 บาท</td>
             </tr>
           </tbody>
           <tbody id="prev-building-fees-table"></tbody>
@@ -3797,12 +3867,12 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="building-field"><label>Enclosure</label><select name="enclosure"><option>No</option><option>Yes</option></select></div>
         <div class="building-field"><label>Max H-Wire (ม.)</label><input name="max_horizontal" type="number" step="0.01" min="0"></div>
         <div class="building-editor-section">ค่าธรรมเนียม</div>
-        <div class="building-field"><label>ค่าเสียหาย (Damage Deposit)</label><input name="damage_deposit" type="number" step="0.01" min="0"></div>
+        <div class="building-field"><label>เงินประกันติดตั้ง (Deposit)</label><input name="damage_deposit" type="number" step="0.01" min="0"></div>
         <div class="building-field"><label>ค่ามัดจำสัญญา (Contract Deposit)</label><input name="contract_deposit" type="number" step="0.01" min="0"></div>
         <div class="building-field"><label>ค่าประกัน (Insurance)</label><input name="insurance_fee" type="number" step="0.01" min="0"></div>
-        <div class="building-field"><label>ค่าหลัก (Main Fee)</label><input name="main_fee" type="number" step="0.01" min="0"></div>
+        <div class="building-field"><label>ค่าธรรมเนียม (Main Fee)</label><input name="main_fee" type="number" step="0.01" min="0"></div>
         <div class="building-field"><label>ค่าบริการรายปี (Annual Fee)</label><input name="annual_fee" type="number" step="0.01" min="0"></div>
-        <div class="building-field"><label>ค่าประสานงาน (Coordination)</label><input name="coordination_fee" type="number" step="0.01" min="0"></div>
+        <div class="building-field"><label>ค่าธรรมเนียมประสานงาน (Coordination Fee)</label><input name="coordination_fee" type="number" step="0.01" min="0"></div>
         <div class="building-field"><label>ค่า Shaft ต่อชั้น</label><input name="shaft_fee_per_floor" type="number" step="0.01" min="0"></div>
         <div class="building-field"><label>ค่าวางสาย Horizontal /ม.</label><input name="horizontal_fee" type="number" step="0.01" min="0"></div>
         <div class="other-fees-panel">
