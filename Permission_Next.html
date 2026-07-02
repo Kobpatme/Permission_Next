@@ -328,17 +328,6 @@ body:not(.auth-locked) #auth-screen{display:none;}
 }
 .user-pill strong{color:var(--text); font-size:12px; max-width:170px; overflow:hidden; text-overflow:ellipsis;}
 .user-pill span{color:var(--accent); text-transform:uppercase; font-size:10.5px; letter-spacing:.5px;}
-#user-manage-btn,
-#logout-btn{
-  background:var(--surface2); border:1px solid var(--border);
-  color:var(--text2); border-radius:9px; padding:8px 12px;
-  cursor:pointer; font-size:12.5px; white-space:nowrap;
-  transition:all .18s; flex-shrink:0;
-  display:flex; align-items:center; gap:7px;
-  font-family:inherit; font-weight:600; letter-spacing:.2px;
-}
-#user-manage-btn:hover,
-#logout-btn:hover{border-color:var(--accent); color:var(--accent); background:var(--accent-soft);}
 #user-admin-modal{
   position:fixed; inset:0; z-index:120000; display:none;
   background:rgba(0,0,0,.58); backdrop-filter:blur(10px);
@@ -406,11 +395,22 @@ body:not(.auth-locked) #auth-screen{display:none;}
   font-weight:800; letter-spacing:-.3px;
 }
 .total-badge{
-  background:var(--grad-accent); color:#fff;
-  border-radius:999px; padding:4px 12px;
-  font-size:11.5px; font-weight:700; letter-spacing:.4px;
+  display:inline-flex; align-items:center; justify-content:center;
+  min-height:32px; border-radius:999px; padding:0 12px;
+  font-size:11.5px; font-weight:800; letter-spacing:.2px;
   white-space:nowrap; font-variant-numeric:tabular-nums;
-  box-shadow:0 4px 14px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.18);
+}
+.count-badge{
+  min-width:52px;
+  background:linear-gradient(135deg,#3b82f6,#6366f1);
+  color:#fff;
+  box-shadow:0 8px 18px rgba(59,130,246,.28), inset 0 1px 0 rgba(255,255,255,.28);
+}
+.sync-badge{
+  background:rgba(148,163,184,.10);
+  border:1px solid rgba(148,163,184,.12);
+  color:var(--text2);
+  font-weight:700;
 }
 .svg-icon{
   width:1em; height:1em; display:inline-block; vertical-align:-.14em;
@@ -421,11 +421,26 @@ body:not(.auth-locked) #auth-screen{display:none;}
 .icon-label{display:inline-flex; align-items:center; gap:7px;}
 .mobile-actions-toggle{display:none;}
 .topbar-actions{
-  display:flex; align-items:center; gap:10px; flex-shrink:0;
+  display:flex; align-items:center; gap:8px; flex-shrink:0; margin-left:auto;
+}
+.topbar-group{
+  display:flex; align-items:center; gap:8px;
+}
+.topbar-primary-actions,
+.topbar-user-actions{
+  padding-left:8px;
+  border-left:1px solid var(--border);
 }
 
 /* SEARCH */
 .search-wrap{position:relative; flex:1; max-width:420px; z-index:2000; margin-left:auto;}
+#filterbar.with-search .filter-controls{flex:0 1 auto;}
+#filterbar.with-search .search-wrap{
+  flex:1 1 420px;
+  min-width:260px;
+  max-width:560px;
+  margin-left:12px;
+}
 #search-input{
   width:100%;
   background:color-mix(in oklab, var(--surface2) 80%, transparent);
@@ -474,19 +489,34 @@ body:not(.auth-locked) #auth-screen{display:none;}
 .ac-texts .ac-en{font-size:11px; color:var(--text2); margin-top:2px;}
 
 /* THEME / BUILDING BUTTONS */
-#theme-btn, #building-toggle, #add-building-btn{
-  background:var(--surface2); border:1px solid var(--border);
-  color:var(--text2); border-radius:9px; padding:8px 13px;
+#theme-btn, #building-toggle, #add-building-btn,
+#user-manage-btn, #logout-btn{
+  min-height:36px;
+  background:rgba(15,23,42,.34); border:1px solid var(--border);
+  color:var(--text2); border-radius:11px; padding:0 13px;
   cursor:pointer; font-size:12.5px; white-space:nowrap;
-  transition:all .18s; flex-shrink:0;
-  display:flex; align-items:center; gap:7px;
-  font-family:inherit; font-weight:600; letter-spacing:.2px;
+  transition:border-color .18s, color .18s, background .18s, transform .18s, box-shadow .18s;
+  flex-shrink:0;
+  display:flex; align-items:center; justify-content:center; gap:7px;
+  font-family:inherit; font-weight:750; letter-spacing:.2px;
 }
-#theme-btn:hover, #building-toggle:hover, #add-building-btn:hover{
+#theme-btn:hover, #building-toggle:hover, #user-manage-btn:hover, #logout-btn:hover{
   border-color:var(--accent); color:var(--accent);
   background:var(--accent-soft);
   transform:translateY(-1px);
   box-shadow:0 6px 16px rgba(0,0,0,.18);
+}
+#add-building-btn{
+  border:none;
+  background:var(--grad-accent);
+  color:#fff;
+  box-shadow:0 10px 24px rgba(59,130,246,.26), inset 0 1px 0 rgba(255,255,255,.28);
+}
+#add-building-btn:hover{
+  color:#fff;
+  transform:translateY(-1px);
+  filter:saturate(1.08) brightness(1.04);
+  box-shadow:0 14px 30px rgba(59,130,246,.32), inset 0 1px 0 rgba(255,255,255,.32);
 }
 #building-toggle.active{
   background:var(--grad-accent-soft);
@@ -897,6 +927,20 @@ select.flt.active{
 }
 .map-mode-toggle button:hover{background:var(--surface2); color:var(--text); transform:translateY(-1px);}
 .map-mode-toggle button.active{background:var(--grad-accent); color:#fff; box-shadow:0 5px 16px var(--accent-glow);}
+.map-sync-status{
+  position:absolute; top:72px; left:58px; z-index:420;
+  min-height:32px;
+  background:color-mix(in oklab, var(--surface) 86%, transparent);
+  border:1px solid var(--border2);
+  box-shadow:var(--shadow-md);
+  backdrop-filter:blur(14px) saturate(150%);
+  -webkit-backdrop-filter:blur(14px) saturate(150%);
+}
+.map-sync-status::before{
+  content:""; width:7px; height:7px; border-radius:50%;
+  background:var(--green); box-shadow:0 0 0 4px rgba(16,185,129,.13);
+  margin-right:8px;
+}
 .map-tools-panel{
   position:absolute; top:14px; right:14px; z-index:420;
   width:210px; padding:10px;
@@ -1010,21 +1054,19 @@ select.flt.active{
 }
 #drawer-overlay.open{opacity:1; pointer-events:all;}
 
-@media(max-width:768px){
-  #detail-drawer{width:96vw; max-height:90vh; border-radius:14px;}
+@media(max-width:1180px){
   #topbar{
     display:grid;
     grid-template-columns:1fr auto;
-    grid-template-areas:"logo menu" "search search";
+    grid-template-areas:"logo menu";
     align-items:center;
     height:auto;
-    min-height:104px;
-    padding:10px 14px 12px;
+    min-height:64px;
+    padding:10px 14px;
     gap:9px 10px;
   }
   .logo{grid-area:logo; min-width:0;}
   .logo h1{font-size:14px; overflow:hidden; text-overflow:ellipsis;}
-  .search-wrap{grid-area:search; max-width:none; width:100%; margin-left:0;}
   .mobile-actions-toggle{
     grid-area:menu;
     min-width:44px; min-height:44px;
@@ -1046,6 +1088,10 @@ select.flt.active{
     box-shadow:var(--shadow-lg); z-index:100000;
   }
   .topbar-actions.open{display:grid;}
+  .topbar-group{
+    display:grid; grid-template-columns:1fr; gap:8px;
+    padding-left:0; border-left:none;
+  }
   .topbar-actions .total-badge,
   .topbar-actions .user-pill,
   .topbar-actions button{
@@ -1053,11 +1099,21 @@ select.flt.active{
   }
   .topbar-actions .total-badge{display:flex; align-items:center;}
   .topbar-actions .user-pill strong{display:inline; max-width:130px;}
+  #filterbar.with-search .search-wrap{
+    flex:1 1 320px;
+    max-width:none;
+    margin-left:0;
+  }
+}
+
+@media(max-width:768px){
+  #detail-drawer{width:96vw; max-height:90vh; border-radius:14px;}
   #filterbar{padding:8px 14px; gap:6px;}
   .filter-controls{gap:6px;}
   #statsbar{gap:6px; bottom:18px; left:14px;}
   .map-mode-toggle{top:10px; left:52px;}
   .map-mode-toggle button{padding:6px 8px; font-size:10px;}
+  .map-sync-status{top:52px; left:52px; min-height:30px; padding:0 10px; font-size:11px;}
   .map-tools-panel{top:52px; right:10px; width:min(210px, calc(100vw - 20px)); padding:8px;}
   .map-tool-btn,.layer-toggle{font-size:10px; padding:7px;}
   .stat-card{padding:11px 16px; min-width:90px;}
@@ -1073,6 +1129,12 @@ select.flt.active{
   #f-status{display:block;}
   .filters-collapsed #f-status{display:none;}
   #filterbar{padding:7px 10px;}
+  #filterbar.with-search .search-wrap{
+    flex-basis:100%;
+    min-width:100%;
+    order:3;
+  }
+  .map-sync-status{left:12px;}
   .filter-label{display:none;}
   #result-count{font-size:11px;}
 }
@@ -1479,31 +1541,26 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
     <h1>Permission <span>Next</span></h1>
   </div>
 
-  <div class="search-wrap">
-    <span class="search-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
-    <input id="search-input" type="text" placeholder="ค้นหาอาคาร... ภาษาไทย หรือ English" autocomplete="off"/>
-    <button id="search-clear" title="ล้างการค้นหา"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
-    <div id="autocomplete"></div>
-  </div>
-
   <button id="mobile-actions-toggle" class="mobile-actions-toggle" type="button" aria-expanded="false" aria-controls="topbar-actions" title="เมนู">
     <svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>
     <span>เมนู</span>
   </button>
   <div id="topbar-actions" class="topbar-actions">
-    <span class="total-badge" id="total-badge">0</span>
-    <span class="total-badge" id="sync-status" style="background:var(--surface3);color:var(--text2);box-shadow:none;font-weight:600;">กำลังเชื่อมต่อ...</span>
-    <button id="add-building-btn" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg> เพิ่มอาคาร</button>
-    <button id="building-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> อาคาร</button>
-    <button id="user-manage-btn" class="auth-only-admin" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg> ผู้ใช้</button>
-    <div class="user-pill" id="current-user-pill" title="ผู้ใช้ปัจจุบัน"><strong>-</strong><span>-</span></div>
-    <button id="logout-btn" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg> ออก</button>
-    <button id="theme-btn" title="เปลี่ยนธีม"><svg id="theme-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> <span id="theme-label">Dark</span></button>
+    <div class="topbar-group topbar-primary-actions">
+      <button id="add-building-btn" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg> เพิ่มอาคาร</button>
+      <button id="building-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> อาคาร</button>
+    </div>
+    <div class="topbar-group topbar-user-actions">
+      <button id="user-manage-btn" class="auth-only-admin" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg> ผู้ใช้</button>
+      <div class="user-pill" id="current-user-pill" title="ผู้ใช้ปัจจุบัน"><strong>-</strong><span>-</span></div>
+      <button id="theme-btn" title="เปลี่ยนธีม"><svg id="theme-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> <span id="theme-label">Dark</span></button>
+      <button id="logout-btn" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg> ออก</button>
+    </div>
   </div>
 </div>
 
 <!-- FILTER BAR -->
-<div id="filterbar">
+<div id="filterbar" class="with-search">
   <button id="filter-toggle" type="button" aria-expanded="true"><svg class="svg-icon chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg><span class="filter-toggle-text">ตัวกรอง</span></button>
   <div class="filter-controls">
     <span class="filter-label">กรอง:</span>
@@ -1548,6 +1605,12 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
     </select>
     <button id="btn-reset">รีเซ็ต</button>
   </div>
+  <div class="search-wrap">
+    <span class="search-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
+    <input id="search-input" type="text" placeholder="ค้นหาอาคาร... ภาษาไทย หรือ English" autocomplete="off"/>
+    <button id="search-clear" title="ล้างการค้นหา"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    <div id="autocomplete"></div>
+  </div>
   <span id="result-count"></span>
 </div>
 
@@ -1560,6 +1623,7 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
       <button type="button" data-mode="satellite">ดาวเทียม</button>
       <button type="button" data-mode="hybrid">ผสม</button>
     </div>
+    <span class="total-badge sync-badge map-sync-status" id="sync-status">กำลังเชื่อมต่อ...</span>
     <div class="map-tools-panel" id="map-tools-panel">
       <div class="map-tools-actions">
         <button class="map-tool-btn active" id="legend-toggle" type="button">Legend</button>
@@ -2685,7 +2749,8 @@ function render(data) {
   document.getElementById('st-mou').textContent = mou;
   document.getElementById('st-check').textContent = chk;
   document.getElementById('st-closed').textContent = closed;
-  document.getElementById('total-badge').textContent = data.length;
+  const totalBadge = document.getElementById('total-badge');
+  if (totalBadge) totalBadge.textContent = data.length;
   document.getElementById('result-count').textContent = `แสดง ${data.length} รายการ`;
   document.getElementById('sb-count').textContent = data.length + ' รายการ';
   updateLegendCounts(data);
