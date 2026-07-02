@@ -1,0 +1,3157 @@
+﻿<!DOCTYPE html>
+<html lang="th" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Permission Next — Map Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" onerror="window._leafletLoadFailed=true"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" onerror="window._markerClusterLoadFailed=true"></script>
+<style>
+/* ====== EXECUTIVE DARK — PREMIUM DESIGN SYSTEM v4 ====== */
+[data-theme="dark"]{
+  --bg:#070b14;
+  --bg-grad:radial-gradient(1200px 600px at 80% -10%, rgba(59,130,246,.08), transparent 60%),
+            radial-gradient(900px 500px at -10% 110%, rgba(99,102,241,.06), transparent 60%),
+            #070b14;
+  --surface:#0f1626;
+  --surface2:#151f33;
+  --surface3:#1c2740;
+  --glass:rgba(20,28,46,.72);
+  --border:rgba(148,163,184,.12);
+  --border2:rgba(148,163,184,.22);
+  --accent:#3b82f6;
+  --accent2:#6366f1;
+  --accent-soft:rgba(59,130,246,.14);
+  --accent-glow:rgba(59,130,246,.35);
+  --grad-accent:linear-gradient(135deg,#3b82f6 0%,#6366f1 100%);
+  --grad-accent-soft:linear-gradient(135deg,rgba(59,130,246,.18),rgba(99,102,241,.10));
+  --green:#10b981; --green-bg:rgba(16,185,129,.12); --green-glow:rgba(16,185,129,.28);
+  --yellow:#f59e0b; --yellow-bg:rgba(245,158,11,.12); --yellow-glow:rgba(245,158,11,.28);
+  --mou:#a78bfa; --mou-bg:rgba(167,139,250,.12); --mou-glow:rgba(167,139,250,.28);
+  --red:#ef4444; --red-bg:rgba(239,68,68,.12);
+  --text:#f1f5f9;
+  --text2:#94a3b8;
+  --muted:#64748b;
+  --shadow-sm:0 2px 8px rgba(0,0,0,.35);
+  --shadow-md:0 8px 28px rgba(0,0,0,.45);
+  --shadow-lg:0 24px 60px rgba(0,0,0,.55);
+  --shadow-xl:0 32px 80px rgba(0,0,0,.65);
+  --map-tile:dark_all;
+  --tooltip-bg:rgba(15,22,38,.96);
+  --stat-bg:rgba(15,22,38,.78);
+  --topbar-border:rgba(59,130,246,.18);
+}
+[data-theme="light"]{
+  --bg:#f4f6fb;
+  --bg-grad:radial-gradient(1000px 500px at 80% -10%, rgba(59,130,246,.06), transparent 60%),#f4f6fb;
+  --surface:#ffffff;
+  --surface2:#f8fafc;
+  --surface3:#eef2f8;
+  --glass:rgba(255,255,255,.82);
+  --border:rgba(15,23,42,.08);
+  --border2:rgba(15,23,42,.16);
+  --accent:#2563eb; --accent2:#4f46e5;
+  --accent-soft:rgba(37,99,235,.10);
+  --accent-glow:rgba(37,99,235,.20);
+  --grad-accent:linear-gradient(135deg,#2563eb 0%,#4f46e5 100%);
+  --grad-accent-soft:linear-gradient(135deg,rgba(37,99,235,.12),rgba(79,70,229,.08));
+  --green:#059669; --green-bg:rgba(5,150,105,.10); --green-glow:rgba(5,150,105,.22);
+  --yellow:#d97706; --yellow-bg:rgba(217,119,6,.10); --yellow-glow:rgba(217,119,6,.22);
+  --mou:#7c3aed; --mou-bg:rgba(124,58,237,.10); --mou-glow:rgba(124,58,237,.22);
+  --red:#dc2626; --red-bg:rgba(220,38,38,.10);
+  --text:#0f172a; --text2:#475569; --muted:#94a3b8;
+  --shadow-sm:0 2px 8px rgba(15,23,42,.06);
+  --shadow-md:0 8px 24px rgba(15,23,42,.08);
+  --shadow-lg:0 20px 50px rgba(15,23,42,.12);
+  --shadow-xl:0 32px 72px rgba(15,23,42,.16);
+  --map-tile:light_all;
+  --tooltip-bg:rgba(255,255,255,.98);
+  --stat-bg:rgba(255,255,255,.92);
+  --topbar-border:var(--border);
+}
+
+/* ====== RESET ====== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100vh;overflow:hidden;}
+body{
+  font-family:'Inter','Segoe UI',system-ui,-apple-system,sans-serif;
+  background:var(--bg-grad); color:var(--text);
+  display:flex; flex-direction:column;
+  transition:background .35s, color .35s;
+  -webkit-font-smoothing:antialiased;
+  font-feature-settings:"cv11","ss01","ss03";
+}
+
+/* ====== TOPBAR ====== */
+#topbar{
+  background:linear-gradient(180deg, color-mix(in oklab, var(--surface) 92%, transparent) 0%, color-mix(in oklab, var(--surface) 78%, transparent) 100%);
+  backdrop-filter:blur(20px) saturate(140%);
+  -webkit-backdrop-filter:blur(20px) saturate(140%);
+  border-bottom:1px solid var(--topbar-border);
+  padding:0 24px; height:64px;
+  display:flex; align-items:center; gap:16px;
+  flex-shrink:0; z-index:9000; overflow:visible;
+  box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 6px 24px rgba(0,0,0,.25);
+  position:relative;
+}
+#topbar::after{
+  content:""; position:absolute; left:0; right:0; bottom:-1px; height:1px;
+  background:linear-gradient(90deg, transparent, var(--accent-glow), transparent);
+  opacity:.5;
+}
+.logo{display:flex; align-items:center; gap:12px; white-space:nowrap;}
+.logo-icon{font-size:26px;}
+.logo h1{font-size:15px; font-weight:600; letter-spacing:-.2px; color:var(--text);}
+.logo h1 span{
+  background:var(--grad-accent);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  font-weight:800; letter-spacing:-.3px;
+}
+.total-badge{
+  background:var(--grad-accent); color:#fff;
+  border-radius:999px; padding:4px 12px;
+  font-size:11.5px; font-weight:700; letter-spacing:.4px;
+  white-space:nowrap; font-variant-numeric:tabular-nums;
+  box-shadow:0 4px 14px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.18);
+}
+.svg-icon{
+  width:1em; height:1em; display:inline-block; vertical-align:-.14em;
+  flex:0 0 auto; fill:none; stroke:currentColor; stroke-width:2;
+  stroke-linecap:round; stroke-linejoin:round;
+}
+.svg-icon-fill{fill:currentColor; stroke:none;}
+.icon-label{display:inline-flex; align-items:center; gap:7px;}
+
+/* SEARCH */
+.search-wrap{position:relative; flex:1; max-width:420px; z-index:2000; margin-left:auto;}
+#search-input{
+  width:100%;
+  background:color-mix(in oklab, var(--surface2) 80%, transparent);
+  border:1px solid var(--border);
+  border-radius:10px; padding:10px 38px 10px 40px;
+  color:var(--text); font-size:13.5px; outline:none;
+  transition:border .18s, box-shadow .18s, background .18s;
+  font-family:inherit;
+}
+#search-input:focus{
+  border-color:var(--accent);
+  background:var(--surface2);
+  box-shadow:0 0 0 4px var(--accent-soft);
+}
+#search-input::placeholder{color:var(--muted); font-size:13px;}
+.search-ico{
+  position:absolute; left:14px; top:50%; transform:translateY(-50%);
+  color:var(--muted); pointer-events:none; display:flex; align-items:center;
+}
+#search-clear{
+  position:absolute; right:10px; top:50%; transform:translateY(-50%);
+  background:var(--surface3); border:none; color:var(--text2); cursor:pointer;
+  font-size:14px; display:none; line-height:1; padding:0;
+  width:22px; height:22px; border-radius:50%;
+  align-items:center; justify-content:center;
+  transition:all .15s;
+}
+#search-clear .svg-icon{width:13px; height:13px;}
+#search-clear:hover{background:var(--accent); color:#fff;}
+#autocomplete{
+  position:absolute; top:calc(100% + 8px); left:0; right:0;
+  background:var(--surface); border:1px solid var(--border2);
+  border-radius:12px; max-height:320px; overflow-y:auto;
+  z-index:99999; display:none;
+  box-shadow:var(--shadow-lg);
+  padding:4px;
+}
+.ac-item{
+  padding:10px 12px; cursor:pointer; border-radius:8px;
+  transition:background .12s;
+  display:flex; align-items:center; gap:10px;
+}
+.ac-item:hover{background:var(--surface2);}
+.ac-dot{width:8px; height:8px; border-radius:50%; flex-shrink:0; box-shadow:0 0 0 3px color-mix(in oklab, currentColor 20%, transparent);}
+.ac-texts .ac-th{font-size:13px; font-weight:600; color:var(--text);}
+.ac-texts .ac-en{font-size:11px; color:var(--text2); margin-top:2px;}
+
+/* THEME / BUILDING BUTTONS */
+#theme-btn, #building-toggle, #add-building-btn{
+  background:var(--surface2); border:1px solid var(--border);
+  color:var(--text2); border-radius:9px; padding:8px 13px;
+  cursor:pointer; font-size:12.5px; white-space:nowrap;
+  transition:all .18s; flex-shrink:0;
+  display:flex; align-items:center; gap:7px;
+  font-family:inherit; font-weight:600; letter-spacing:.2px;
+}
+#theme-btn:hover, #building-toggle:hover, #add-building-btn:hover{
+  border-color:var(--accent); color:var(--accent);
+  background:var(--accent-soft);
+  transform:translateY(-1px);
+  box-shadow:0 6px 16px rgba(0,0,0,.18);
+}
+#building-toggle.active{
+  background:var(--grad-accent-soft);
+  border-color:var(--accent); color:var(--accent);
+}
+
+/* ====== FILTER BAR ====== */
+#filterbar{
+  background:color-mix(in oklab, var(--surface) 70%, transparent);
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--border);
+  padding:10px 24px;
+  display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+  flex-shrink:0; z-index:100;
+  transition:padding .22s ease, min-height .22s ease;
+}
+#filterbar.filters-collapsed{padding-top:7px; padding-bottom:7px; min-height:40px;}
+.filter-controls{display:flex; gap:8px; align-items:center; flex-wrap:wrap; flex:1;}
+.filters-collapsed .filter-controls{display:none;}
+.filter-label{
+  font-size:10.5px; color:var(--muted); font-weight:700; white-space:nowrap;
+  text-transform:uppercase; letter-spacing:1px; margin-right:4px;
+}
+#filter-toggle{
+  background:var(--surface2); border:1px solid var(--border);
+  color:var(--text2); border-radius:8px; padding:7px 11px;
+  font-size:12px; cursor:pointer; transition:all .18s; white-space:nowrap;
+  font-family:inherit; font-weight:700; display:flex; align-items:center; gap:6px;
+}
+#filter-toggle:hover{border-color:var(--accent); color:var(--accent); background:var(--accent-soft);}
+#filter-toggle .chev{transition:transform .18s; width:13px; height:13px;}
+#filterbar.filters-collapsed #filter-toggle .chev{transform:rotate(-90deg);}
+select.flt{
+  background:var(--surface2); border:1px solid var(--border);
+  color:var(--text); border-radius:8px; padding:7px 11px;
+  font-size:12.5px; cursor:pointer; outline:none;
+  transition:all .18s; font-family:inherit; font-weight:500;
+}
+select.flt:hover{border-color:var(--border2);}
+select.flt:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
+select.flt.active{
+  border-color:var(--accent);
+  background:var(--accent-soft);
+  color:var(--accent);
+  font-weight:600;
+}
+#btn-reset{
+  background:transparent; border:1px solid var(--border);
+  color:var(--text2); border-radius:8px; padding:7px 13px;
+  font-size:12.5px; cursor:pointer; transition:all .18s; white-space:nowrap;
+  font-family:inherit; font-weight:600;
+}
+#btn-reset:hover{border-color:var(--red); color:var(--red); background:var(--red-bg);}
+#result-count{
+  font-size:12px; color:var(--text2); white-space:nowrap; margin-left:auto;
+  font-variant-numeric:tabular-nums; letter-spacing:.2px; font-weight:500;
+  padding:5px 10px; background:var(--surface2); border-radius:6px;
+  border:1px solid var(--border);
+}
+
+/* ====== MAIN ====== */
+#main{display:flex; flex:1; overflow:hidden; position:relative;}
+
+/* ====== MAP ====== */
+#map-wrap{flex:1; position:relative;}
+#map{width:100%; height:100%;}
+.map-error{
+  position:absolute; inset:0; z-index:500;
+  display:grid; place-items:center; text-align:center;
+  padding:24px; color:var(--text);
+  background:var(--bg-grad);
+}
+.map-error-box{
+  max-width:420px; padding:18px 20px;
+  background:var(--surface); border:1px solid var(--border2); border-radius:12px;
+  box-shadow:var(--shadow-lg); line-height:1.7;
+}
+
+/* TOOLTIP */
+#map-tooltip{
+  position:absolute; pointer-events:none; z-index:600;
+  background:var(--tooltip-bg);
+  border:1px solid var(--border2);
+  border-radius:12px; padding:12px 16px;
+  box-shadow:var(--shadow-lg);
+  display:none; max-width:260px;
+  backdrop-filter:blur(16px) saturate(150%);
+  -webkit-backdrop-filter:blur(16px) saturate(150%);
+  transition:opacity .12s;
+}
+#map-tooltip .tt-name{font-size:13.5px; font-weight:700; color:var(--text); letter-spacing:-.1px;}
+#map-tooltip .tt-eng{font-size:11px; color:var(--text2); margin-top:3px;}
+#map-tooltip .tt-row{display:flex; gap:5px; margin-top:10px; flex-wrap:wrap;}
+
+/* STATS OVERLAY */
+#statsbar{
+  position:absolute; bottom:28px; left:28px; z-index:400;
+  display:flex; gap:10px; flex-wrap:wrap;
+  max-width:calc(100vw - 56px);
+}
+.stat-card{
+  position:relative;
+  background:var(--stat-bg);
+  border:1px solid var(--border2);
+  border-radius:14px; padding:14px 22px;
+  backdrop-filter:blur(16px) saturate(150%);
+  -webkit-backdrop-filter:blur(16px) saturate(150%);
+  min-width:112px; text-align:center;
+  box-shadow:var(--shadow-md);
+  transition:transform .25s cubic-bezier(.34,1.56,.64,1), box-shadow .25s;
+  overflow:hidden;
+}
+.stat-card::before{
+  content:""; position:absolute; top:0; left:0; right:0; height:3px;
+  border-radius:14px 14px 0 0;
+}
+.stat-card:hover{transform:translateY(-3px); box-shadow:var(--shadow-lg);}
+.stat-card:nth-child(1)::before{background:linear-gradient(90deg, var(--green), color-mix(in oklab, var(--green) 60%, transparent));}
+.stat-card:nth-child(2)::before{background:linear-gradient(90deg, var(--mou), color-mix(in oklab, var(--mou) 60%, transparent));}
+.stat-card:nth-child(3)::before{background:linear-gradient(90deg, var(--yellow), color-mix(in oklab, var(--yellow) 60%, transparent));}
+.stat-card:nth-child(4)::before{background:linear-gradient(90deg, var(--red), color-mix(in oklab, var(--red) 60%, transparent));}
+.stat-card .sv{
+  font-size:30px; font-weight:800; line-height:1;
+  font-variant-numeric:tabular-nums; letter-spacing:-1px;
+}
+.stat-card .sl{
+  font-size:10.5px; color:var(--muted); margin-top:7px;
+  font-weight:700; letter-spacing:1px; text-transform:uppercase;
+}
+.sv-green{color:var(--green); text-shadow:0 0 24px var(--green-glow);}
+.sv-purple{color:var(--mou); text-shadow:0 0 24px var(--mou-glow);}
+.sv-yellow{color:var(--yellow); text-shadow:0 0 24px var(--yellow-glow);}
+.sv-red{color:var(--red); text-shadow:0 0 24px rgba(239,68,68,.26);}
+
+/* ====== SIDEBAR (drawer-style) ====== */
+#sidebar{
+  position:fixed; right:0; top:113px; bottom:0;
+  transform:translateX(100%);
+  transition:transform .3s cubic-bezier(.4,0,.2,1);
+  z-index:410;
+  width:360px;
+  background:var(--surface);
+  border-left:1px solid var(--border2);
+  box-shadow:-12px 0 40px rgba(0,0,0,.35);
+  display:flex; flex-direction:column; overflow:hidden;
+}
+#sidebar.show{transform:translateX(0);}
+#sidebar-header{
+  padding:16px 20px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+  display:flex; align-items:center; justify-content:space-between;
+  background:linear-gradient(180deg, var(--surface2), transparent);
+}
+#sidebar-header h2{
+  font-size:11px; font-weight:800; color:var(--text);
+  text-transform:uppercase; letter-spacing:1.2px;
+}
+#sb-count{
+  font-size:11px; color:var(--text2); font-weight:600;
+  font-variant-numeric:tabular-nums;
+  padding:3px 9px; background:var(--surface3); border-radius:999px;
+}
+#sidebar-list{overflow-y:auto; flex:1; padding:6px;}
+.list-item{
+  padding:13px 14px;
+  margin:3px 2px;
+  border-radius:10px;
+  cursor:pointer;
+  transition:background-color .15s, border-color .15s;
+  border:1px solid transparent;
+  position:relative;
+  contain:layout paint;
+  content-visibility:auto;
+  contain-intrinsic-size:96px;
+}
+.list-item:hover{background:var(--surface2); border-color:var(--border);}
+.list-item.selected{
+  background:var(--grad-accent-soft);
+  border-color:color-mix(in oklab, var(--accent) 40%, transparent);
+  box-shadow:0 4px 16px var(--accent-soft);
+}
+.list-item.selected::before{
+  content:""; position:absolute; left:0; top:14px; bottom:14px; width:3px;
+  background:var(--grad-accent); border-radius:0 3px 3px 0;
+}
+.li-name{font-size:13.5px; font-weight:600; color:var(--text); line-height:1.4; letter-spacing:-.1px;}
+.li-eng{font-size:11px; color:var(--text2); margin-top:2px;}
+.li-meta{display:flex; gap:5px; margin-top:8px; flex-wrap:wrap;}
+
+/* TAGS */
+.tag{
+  font-size:10.5px; font-weight:700; padding:3px 9px; border-radius:6px;
+  display:inline-flex; align-items:center; gap:4px; white-space:nowrap;
+  letter-spacing:.3px; line-height:1.4;
+}
+.tag-confirmed{background:var(--green-bg); color:var(--green); box-shadow:inset 0 0 0 1px color-mix(in oklab, var(--green) 25%, transparent);}
+.tag-mou{background:var(--mou-bg); color:var(--mou); box-shadow:inset 0 0 0 1px color-mix(in oklab, var(--mou) 25%, transparent);}
+.tag-check{background:var(--yellow-bg); color:var(--yellow); box-shadow:inset 0 0 0 1px color-mix(in oklab, var(--yellow) 25%, transparent);}
+.tag-closed{background:var(--red-bg); color:var(--red); box-shadow:inset 0 0 0 1px color-mix(in oklab, var(--red) 25%, transparent);}
+.tag-p1{background:var(--accent-soft); color:var(--accent); box-shadow:inset 0 0 0 1px color-mix(in oklab, var(--accent) 25%, transparent);}
+.tag-p2{background:rgba(99,102,241,.14); color:var(--accent2); box-shadow:inset 0 0 0 1px rgba(99,102,241,.25);}
+.tag-x{background:rgba(100,116,139,.14); color:var(--muted); box-shadow:inset 0 0 0 1px rgba(100,116,139,.20);}
+.tag-neutral{background:var(--surface3); color:var(--text2); border:1px solid var(--border);}
+.tag-l1{background:var(--green-bg); color:var(--green); border:1px solid color-mix(in oklab, var(--green) 28%, transparent);}
+.tag-l2{background:var(--yellow-bg); color:var(--yellow); border:1px solid color-mix(in oklab, var(--yellow) 28%, transparent);}
+.tag-l3{background:var(--red-bg); color:var(--red); border:1px solid color-mix(in oklab, var(--red) 28%, transparent);}
+
+/* ====== DETAIL MODAL ====== */
+#detail-drawer{
+  position:fixed;
+  top:50%; left:50%;
+  transform:translate(-50%, -46%) scale(.96);
+  width:min(600px, 94vw);
+  max-height:86vh;
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:18px;
+  display:flex; flex-direction:column; overflow:hidden;
+  z-index:9500;
+  box-shadow:var(--shadow-xl), 0 0 0 1px var(--border);
+  opacity:0; pointer-events:none;
+  transition:opacity .25s ease, transform .25s cubic-bezier(.34,1.56,.64,1);
+}
+#detail-drawer.open{
+  opacity:1; pointer-events:all;
+  transform:translate(-50%, -50%) scale(1);
+}
+#drawer-header{
+  padding:22px 24px 16px;
+  border-bottom:1px solid var(--border);
+  flex-shrink:0; position:relative;
+  background:linear-gradient(180deg, var(--surface2), transparent);
+}
+#drawer-close{
+  position:absolute; top:18px; right:18px;
+  background:var(--surface2); border:1px solid var(--border);
+  color:var(--text2); border-radius:9px;
+  width:32px; height:32px; cursor:pointer; font-size:16px;
+  display:flex; align-items:center; justify-content:center;
+  transition:all .15s; font-family:inherit;
+}
+#drawer-close .svg-icon{width:16px; height:16px;}
+#drawer-close:hover{background:var(--red-bg); border-color:var(--red); color:var(--red); transform:rotate(90deg);}
+#drawer-body{overflow-y:auto; flex:1; padding:18px 24px 24px;}
+
+/* DRAWER TABS */
+.drawer-tabs{
+  display:flex; gap:4px;
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:10px; padding:4px; margin:4px 0 18px;
+}
+.dtab{
+  flex:1;
+  padding:9px 14px; font-size:12.5px; font-weight:600;
+  cursor:pointer; color:var(--text2);
+  border-radius:7px;
+  transition:all .18s; white-space:nowrap; letter-spacing:.2px;
+  text-align:center;
+}
+.dtab:hover{color:var(--text); background:var(--surface3);}
+.dtab.active{
+  color:#fff;
+  background:var(--grad-accent);
+  box-shadow:0 4px 14px var(--accent-glow);
+}
+.tab-panel{display:none;}
+.tab-panel.active{display:block; animation:fadeIn .25s ease;}
+@keyframes fadeIn{from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;}}
+
+/* DRAWER CONTENT */
+.d-title{font-size:19px; font-weight:700; color:var(--text); line-height:1.3; padding-right:48px; letter-spacing:-.3px;}
+.d-eng{font-size:12.5px; color:var(--text2); margin-top:4px;}
+.d-tags{display:flex; gap:5px; flex-wrap:wrap; margin:12px 0 0;}
+
+.section-head{
+  font-size:10.5px; font-weight:800; color:var(--accent);
+  text-transform:uppercase; letter-spacing:1.4px;
+  padding-bottom:8px;
+  margin:20px 0 14px;
+  display:flex; align-items:center; gap:10px;
+}
+.section-head::after{
+  content:""; flex:1; height:1px;
+  background:linear-gradient(90deg, var(--border2), transparent);
+}
+.info-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px 18px;}
+.info-cell{
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:10px 12px;
+  transition:border .15s;
+}
+.info-cell:hover{border-color:var(--border2);}
+.info-cell label{
+  font-size:9.5px; color:var(--muted); font-weight:700;
+  text-transform:uppercase; letter-spacing:.8px; display:block; margin-bottom:4px;
+}
+.info-cell p{font-size:13px; color:var(--text); line-height:1.55; font-weight:500;}
+.info-cell.full{grid-column:1/-1;}
+.info-cell p a{color:var(--accent); text-decoration:none; font-weight:600;}
+.info-cell p a:hover{text-decoration:underline;}
+.coord-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.copy-coord-btn{
+  border:1px solid var(--border); background:var(--surface3); color:var(--text2);
+  border-radius:7px; padding:4px 8px; cursor:pointer;
+  font:700 11px/1 'Inter','Segoe UI',sans-serif;
+  display:inline-flex; align-items:center; gap:5px;
+  transition:all .16s;
+}
+.copy-coord-btn:hover{border-color:var(--accent); color:var(--accent); background:var(--accent-soft);}
+.copy-coord-btn.copied{border-color:var(--green); color:var(--green); background:var(--green-bg);}
+.copy-coord-btn .svg-icon{width:12px; height:12px;}
+
+/* FEE TABLE */
+.fee-table{width:100%; border-collapse:separate; border-spacing:0; margin-top:6px; background:var(--surface2); border-radius:10px; overflow:hidden; border:1px solid var(--border);}
+.fee-table tr{border-bottom:1px solid var(--border);}
+.fee-table tr:last-child{border-bottom:none;}
+.fee-table td{padding:11px 14px; font-size:13px; vertical-align:top; border-bottom:1px solid var(--border);}
+.fee-table tr:last-child td{border-bottom:none;}
+.fee-table td:first-child{color:var(--text2); width:60%;}
+.fee-table td:last-child{font-weight:700; text-align:right; color:var(--text); font-variant-numeric:tabular-nums;}
+.fee-total-row td{
+  font-weight:800; color:var(--accent);
+  background:var(--accent-soft);
+  font-size:14.5px;
+}
+.fee-total-row td:last-child{color:var(--accent);}
+
+.no-fee{color:var(--muted); font-size:13px; text-align:center; padding:32px 0; font-style:italic;}
+
+.remark-box{
+  background:var(--yellow-bg); border:1px solid color-mix(in oklab, var(--yellow) 30%, transparent);
+  border-left:4px solid var(--yellow);
+  border-radius:8px; padding:12px 16px; margin-top:10px;
+  font-size:12.5px; color:var(--text); line-height:1.7;
+}
+.contact-card{
+  background:var(--surface2); border-radius:12px;
+  padding:16px; border:1px solid var(--border); margin-bottom:12px;
+  transition:border .15s, transform .15s;
+}
+.contact-card:hover{border-color:var(--border2); transform:translateY(-1px);}
+.contact-name{
+  font-size:13.5px; font-weight:700; color:var(--text); margin-bottom:12px;
+  padding-bottom:10px; border-bottom:1px solid var(--border); letter-spacing:-.1px;
+}
+.contact-row{display:flex; align-items:flex-start; gap:10px; margin-top:9px; font-size:12.5px;}
+.contact-row .ico{flex-shrink:0; margin-top:1px; display:flex; align-items:center; color:var(--accent);}
+.contact-row .val{color:var(--text2); word-break:break-word; line-height:1.6;}
+.contact-row .val a{color:var(--accent); text-decoration:none; font-weight:600;}
+
+/* LEAFLET OVERRIDES */
+.leaflet-popup-content-wrapper{
+  background:var(--surface) !important; border:1px solid var(--border2) !important;
+  color:var(--text) !important; border-radius:12px !important;
+  box-shadow:var(--shadow-lg) !important;
+}
+.leaflet-popup-tip{background:var(--surface) !important; border:1px solid var(--border2) !important;}
+.leaflet-popup-content{margin:0 !important; font-family:'Inter','Segoe UI',sans-serif;}
+.leaflet-popup-close-button{
+  top:8px !important; right:8px !important;
+  width:24px !important; height:24px !important; border-radius:50% !important;
+  display:grid !important; place-items:center !important;
+  background:color-mix(in oklab, var(--surface) 84%, transparent) !important;
+  color:var(--text2) !important; border:1px solid var(--border) !important;
+  font:700 16px/1 'Inter','Segoe UI',sans-serif !important;
+}
+.leaflet-popup-close-button:hover{background:var(--red-bg) !important; color:var(--red) !important;}
+.lf-popup{padding:14px 16px; min-width:200px;}
+.lf-popup .pn{font-size:13.5px; font-weight:700; color:var(--text); letter-spacing:-.1px;}
+.lf-popup .pe{font-size:11px; color:var(--text2); margin-top:3px;}
+.lf-popup .pm{display:flex; gap:5px; flex-wrap:wrap; margin-top:9px;}
+.lf-popup .popen{
+  display:block; width:100%; margin-top:12px;
+  background:var(--grad-accent); color:#fff; border:none; border-radius:8px;
+  padding:9px; font-size:12.5px; font-weight:700; cursor:pointer; text-align:center;
+  font-family:inherit; letter-spacing:.3px; transition:transform .15s, box-shadow .15s;
+  box-shadow:0 4px 12px var(--accent-glow);
+}
+.lf-popup .popen:hover{transform:translateY(-1px); box-shadow:0 6px 18px var(--accent-glow);}
+.leaflet-control-zoom a{
+  background:var(--surface) !important; color:var(--text) !important;
+  border:1px solid var(--border2) !important;
+  backdrop-filter:blur(10px);
+}
+.leaflet-control-zoom a:hover{background:var(--surface2) !important; color:var(--accent) !important;}
+.leaflet-control-attribution{
+  background:var(--glass) !important; color:var(--text2) !important;
+  backdrop-filter:blur(10px); border-radius:6px 0 0 0 !important;
+  font-size:10px !important;
+}
+.leaflet-control-attribution a{color:var(--accent) !important;}
+.map-mode-toggle{
+  position:absolute; top:14px; left:58px; z-index:420;
+  display:flex; gap:4px; padding:4px;
+  background:var(--glass); border:1px solid var(--border2); border-radius:10px;
+  box-shadow:var(--shadow-md); backdrop-filter:blur(14px) saturate(150%);
+  -webkit-backdrop-filter:blur(14px) saturate(150%);
+}
+.map-mode-toggle button{
+  border:none; background:transparent; color:var(--text2);
+  padding:7px 10px; border-radius:7px; cursor:pointer;
+  font:700 11px/1 'Inter','Segoe UI',sans-serif; letter-spacing:.2px;
+  transition:background .16s, color .16s, transform .16s;
+}
+.map-mode-toggle button:hover{background:var(--surface2); color:var(--text); transform:translateY(-1px);}
+.map-mode-toggle button.active{background:var(--grad-accent); color:#fff; box-shadow:0 5px 16px var(--accent-glow);}
+.map-tools-panel{
+  position:absolute; top:14px; right:14px; z-index:420;
+  width:210px; padding:10px;
+  background:var(--glass); border:1px solid var(--border2); border-radius:12px;
+  box-shadow:var(--shadow-md); backdrop-filter:blur(14px) saturate(150%);
+  -webkit-backdrop-filter:blur(14px) saturate(150%);
+}
+.map-tools-actions{display:grid; grid-template-columns:1fr 1fr; gap:7px;}
+.map-tool-btn{
+  border:1px solid var(--border); background:var(--surface2); color:var(--text);
+  border-radius:8px; padding:8px 9px; cursor:pointer;
+  font:800 11px/1 'Inter','Segoe UI',sans-serif; letter-spacing:.2px;
+  transition:transform .16s, border-color .16s, background .16s, color .16s;
+}
+.map-tool-btn:hover{transform:translateY(-1px); border-color:var(--border2); background:var(--surface3);}
+.map-tool-btn.active{background:var(--grad-accent); color:#fff; border-color:transparent; box-shadow:0 5px 16px var(--accent-glow);}
+.legend-panel{
+  display:grid; grid-template-rows:1fr;
+  transition:grid-template-rows .22s ease, opacity .18s ease, margin-top .18s ease;
+  margin-top:10px;
+}
+.legend-panel.collapsed{grid-template-rows:0fr; opacity:0; margin-top:0; pointer-events:none;}
+.legend-panel-inner{overflow:hidden; display:grid; gap:8px;}
+.legend-row{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  font-size:11px; color:var(--text2);
+}
+.legend-name{display:flex; align-items:center; gap:7px; min-width:0;}
+.legend-pin{
+  width:14px; height:14px; border-radius:50%; flex:0 0 auto;
+  background:var(--legend-color); box-shadow:0 0 0 3px color-mix(in oklab, var(--legend-color) 16%, transparent);
+}
+.legend-count{font-weight:800; color:var(--text); font-variant-numeric:tabular-nums;}
+.layer-toggle{
+  width:100%; border:1px solid var(--border); background:var(--surface2); color:var(--text);
+  border-radius:8px; padding:7px 8px; cursor:pointer;
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  font:700 11px/1 'Inter','Segoe UI',sans-serif;
+}
+.layer-toggle.off{opacity:.48; color:var(--muted);}
+.layer-toggle-dot{width:9px; height:9px; border-radius:50%; background:var(--legend-color); flex:0 0 auto;}
+.pm-marker{
+  position:relative; width:34px; height:42px;
+  transform:translateZ(0); filter:drop-shadow(0 8px 12px rgba(0,0,0,.34));
+}
+.pm-marker svg{display:block; overflow:visible;}
+.pm-marker .pin-shell{fill:color-mix(in oklab, var(--surface) 92%, transparent); stroke:rgba(255,255,255,.82); stroke-width:1.5;}
+.pm-marker .pin-core{fill:var(--marker-color);}
+.pm-marker .pin-glint{fill:rgba(255,255,255,.62);}
+.pm-marker.selected{
+  width:42px; height:52px;
+  filter:drop-shadow(0 10px 18px color-mix(in oklab, var(--marker-color) 42%, rgba(0,0,0,.42)));
+}
+.pm-marker.selected::before{
+  content:""; position:absolute; left:50%; top:50%;
+  width:28px; height:28px; border-radius:50%;
+  border:2px solid var(--marker-color);
+  transform:translate(-50%,-58%);
+  animation:markerPulse 1.7s ease-out infinite;
+}
+@keyframes markerPulse{
+  0%{opacity:.62; transform:translate(-50%,-58%) scale(.65);}
+  100%{opacity:0; transform:translate(-50%,-58%) scale(2.45);}
+}
+.pm-cluster{
+  display:grid; place-items:center;
+  width:42px; height:42px; border-radius:50%;
+  color:#fff; font:800 13px/1 'Inter','Segoe UI',sans-serif;
+  background:radial-gradient(circle at 34% 28%, rgba(255,255,255,.34), transparent 28%),
+             linear-gradient(135deg, var(--accent), var(--accent2));
+  border:2px solid rgba(255,255,255,.78);
+  box-shadow:0 10px 28px var(--accent-glow), 0 0 0 5px rgba(59,130,246,.18);
+}
+.leaflet-marker-icon.marker-cluster{background:transparent; border:none;}
+.lf-popup-premium{
+  min-width:230px; overflow:hidden;
+  border-radius:12px;
+}
+.lf-popup-head{
+  display:flex; align-items:flex-start; gap:10px;
+  padding:13px 14px 11px;
+  background:linear-gradient(180deg, var(--surface2), var(--surface));
+  border-bottom:1px solid var(--border);
+}
+.lf-popup-dot{
+  width:11px; height:11px; border-radius:50%; flex:0 0 auto; margin-top:4px;
+  background:var(--popup-color); box-shadow:0 0 0 4px color-mix(in oklab, var(--popup-color) 18%, transparent);
+}
+.lf-popup-title{font-size:13.5px; font-weight:800; color:var(--text); line-height:1.35;}
+.lf-popup-sub{font-size:11px; color:var(--text2); margin-top:3px; line-height:1.35;}
+.lf-popup-body{padding:12px 14px 14px;}
+.lf-popup-tags{display:flex; gap:5px; flex-wrap:wrap;}
+.lf-popup-action{
+  display:block; width:100%; margin-top:12px;
+  background:var(--grad-accent); color:#fff; border:none; border-radius:8px;
+  padding:9px; font-size:12.5px; font-weight:800; cursor:pointer; text-align:center;
+  font-family:inherit; letter-spacing:.2px; box-shadow:0 4px 12px var(--accent-glow);
+}
+.lf-popup-action:hover{transform:translateY(-1px); box-shadow:0 6px 18px var(--accent-glow);}
+
+/* OVERLAY */
+#drawer-overlay{
+  position:fixed; inset:0;
+  background:radial-gradient(ellipse at center, rgba(0,0,0,.4), rgba(0,0,0,.65));
+  backdrop-filter:blur(8px) saturate(.7);
+  -webkit-backdrop-filter:blur(8px) saturate(.7);
+  z-index:9400;
+  opacity:0; pointer-events:none;
+  transition:opacity .25s ease;
+  cursor:pointer;
+}
+#drawer-overlay.open{opacity:1; pointer-events:all;}
+
+@media(max-width:768px){
+  #detail-drawer{width:96vw; max-height:90vh; border-radius:14px;}
+  #topbar{padding:0 14px; gap:10px; height:60px;}
+  #filterbar{padding:8px 14px; gap:6px;}
+  .filter-controls{gap:6px;}
+  .logo h1{font-size:14px;}
+  #statsbar{gap:6px; bottom:18px; left:14px;}
+  .map-mode-toggle{top:10px; left:52px;}
+  .map-mode-toggle button{padding:6px 8px; font-size:10px;}
+  .map-tools-panel{top:52px; right:10px; width:min(210px, calc(100vw - 20px)); padding:8px;}
+  .map-tool-btn,.layer-toggle{font-size:10px; padding:7px;}
+  .stat-card{padding:11px 16px; min-width:90px;}
+  .stat-card .sv{font-size:24px;}
+  .stat-card .sl{font-size:10px;}
+  select.flt{font-size:12px; padding:6px 9px;}
+  #sidebar{top:108px; width:100vw;}
+  .info-grid{grid-template-columns:1fr;}
+}
+@media(max-width:480px){
+  .search-wrap{max-width:200px;}
+  #total-badge{display:none;}
+  select.flt{display:none;}
+  #f-status{display:block;}
+  .filters-collapsed #f-status{display:none;}
+}
+
+/* FOCUS */
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:6px;}
+button:focus-visible, select:focus-visible, input:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+
+/* SCROLLBAR */
+::-webkit-scrollbar{width:6px; height:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2); border-radius:6px;}
+::-webkit-scrollbar-thumb:hover{background:var(--muted);}
+
+/* ====== QUOTATION FEATURE ====== */
+#quotation-btn{
+  background:var(--grad-accent); color:#fff;
+  border:none; border-radius:9px; padding:9px 16px;
+  cursor:pointer; font-size:12.5px; white-space:nowrap;
+  transition:all .2s; flex-shrink:0;
+  display:flex; align-items:center; gap:7px;
+  font-family:inherit; font-weight:700; letter-spacing:.3px;
+  box-shadow:0 4px 14px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.18);
+}
+#quotation-btn:hover{transform:translateY(-2px); box-shadow:0 8px 22px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.22);}
+
+#quotation-modal{
+  display:none; position:fixed; inset:0;
+  background:radial-gradient(ellipse at center, rgba(0,0,0,.55), rgba(0,0,0,.78));
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  z-index:10000;
+  align-items:center; justify-content:center; padding:20px;
+}
+#quotation-modal.open{display:flex; animation:fadeIn .25s ease;}
+
+#building-editor-modal{
+  display:none; position:fixed; inset:0;
+  background:radial-gradient(ellipse at center, rgba(15,23,42,.42), rgba(0,0,0,.78));
+  backdrop-filter:blur(12px) saturate(130%);
+  -webkit-backdrop-filter:blur(12px) saturate(130%);
+  z-index:11000;
+  align-items:center; justify-content:center; padding:18px;
+}
+#building-editor-modal.open{display:flex; animation:fadeIn .25s ease;}
+#building-editor-container{
+  width:min(920px,96vw);
+  max-height:92vh;
+  overflow:auto;
+  background:linear-gradient(180deg, var(--surface2) 0%, var(--surface) 180px);
+  border:1px solid var(--border2);
+  border-radius:18px;
+  box-shadow:var(--shadow-xl);
+  padding:0;
+}
+.building-editor-header{
+  display:flex; justify-content:space-between; align-items:flex-start; gap:16px;
+  padding:22px 24px 16px;
+  border-bottom:1px solid var(--border);
+  background:var(--grad-accent-soft);
+}
+.building-editor-kicker{
+  display:block; color:var(--accent); font-size:11px; font-weight:800;
+  text-transform:uppercase; letter-spacing:1.2px; margin-bottom:5px;
+}
+#building-editor-title{
+  font-size:20px; line-height:1.2; color:var(--text); margin:0;
+  font-weight:800; letter-spacing:-.4px;
+}
+.building-editor-subtitle{
+  color:var(--text2); font-size:12px; margin-top:6px;
+}
+.building-editor-close{
+  border:1px solid var(--border2); background:var(--surface2); color:var(--text2);
+  border-radius:10px; padding:8px 11px; cursor:pointer;
+  font-family:inherit; font-size:12px; font-weight:700;
+  transition:all .18s;
+}
+.building-editor-close:hover{background:var(--red-bg); border-color:var(--red); color:var(--red);}
+#building-editor-form{padding:20px 24px 22px;}
+.building-editor-message{
+  display:none; margin:0 0 14px; padding:11px 13px;
+  border:1px solid var(--yellow); border-radius:10px;
+  background:var(--yellow-bg); color:var(--text);
+  font-size:12px; line-height:1.55;
+}
+.building-editor-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:14px;
+}
+.building-editor-grid .full{grid-column:1 / -1;}
+.building-editor-section{
+  grid-column:1 / -1;
+  padding-top:6px;
+  margin-top:4px;
+  border-top:1px solid var(--border);
+  color:var(--accent);
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.3px;
+}
+.other-fees-panel{
+  grid-column:1 / -1;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.other-fees-list{display:flex; flex-direction:column; gap:10px;}
+.other-fee-row{
+  display:grid;
+  grid-template-columns:minmax(0,1.35fr) minmax(120px,.7fr) minmax(0,1fr) auto;
+  gap:10px;
+  align-items:end;
+}
+.other-fee-remove{
+  border:1px solid color-mix(in oklab, var(--red) 40%, transparent);
+  background:var(--red-bg);
+  color:var(--red);
+  border-radius:10px;
+  padding:11px 12px;
+  cursor:pointer;
+  font-family:inherit;
+  font-size:12px;
+  font-weight:900;
+}
+.other-fee-add{
+  align-self:flex-start;
+  border:1px dashed var(--border2);
+  background:var(--surface2);
+  color:var(--accent);
+  border-radius:10px;
+  padding:10px 13px;
+  cursor:pointer;
+  font-family:inherit;
+  font-size:12px;
+  font-weight:900;
+}
+.building-editor-message.show{display:block;}
+.building-field label{
+  display:block; color:var(--text); font-size:12px; font-weight:800;
+  margin-bottom:7px; letter-spacing:.25px;
+}
+.building-field input,
+.building-field select,
+.building-field textarea{
+  width:100%; background:var(--surface3); border:1px solid var(--border);
+  color:var(--text); border-radius:10px; padding:11px 13px;
+  font-size:13px; font-family:inherit;
+  transition:border .18s, background .18s, box-shadow .18s;
+}
+.building-field textarea{resize:vertical; min-height:92px; line-height:1.55;}
+.building-field input:focus,
+.building-field select:focus,
+.building-field textarea:focus{
+  outline:none; border-color:var(--accent); background:var(--surface2);
+  box-shadow:0 0 0 3px var(--accent-soft);
+}
+.building-field input.is-invalid{
+  border-color:var(--red);
+  box-shadow:0 0 0 3px var(--red-bg);
+}
+.building-editor-actions{
+  display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:18px;
+  padding-top:16px; border-top:1px solid var(--border);
+}
+.building-editor-action-group{display:flex; justify-content:flex-end; gap:10px;}
+.building-editor-btn{
+  border:1px solid var(--border2); border-radius:10px; padding:10px 14px;
+  cursor:pointer; font-family:inherit; font-weight:800; font-size:12px;
+  transition:all .18s;
+}
+.building-editor-btn.secondary{background:var(--surface2); color:var(--text2);}
+.building-editor-btn.secondary:hover{background:var(--surface3); color:var(--text); transform:translateY(-1px);}
+.building-editor-btn.danger{
+  background:var(--red-bg); border-color:color-mix(in oklab, var(--red) 45%, transparent);
+  color:var(--red);
+}
+.building-editor-btn.danger:hover{
+  background:var(--red); border-color:var(--red); color:#fff;
+  transform:translateY(-1px); box-shadow:0 10px 24px rgba(239,68,68,.24);
+}
+.building-editor-btn[hidden]{display:none;}
+.building-editor-btn.primary{
+  border:none; background:var(--grad-accent); color:#fff;
+  box-shadow:0 6px 18px var(--accent-glow), inset 0 1px 0 rgba(255,255,255,.16);
+}
+.building-editor-btn.primary:hover{transform:translateY(-1px); box-shadow:0 10px 24px var(--accent-glow);}
+@media(max-width:780px){
+  .building-editor-grid{grid-template-columns:1fr;}
+  .other-fee-row{grid-template-columns:1fr;}
+  .building-editor-header{padding:18px;}
+  #building-editor-form{padding:18px;}
+  .building-editor-actions{flex-direction:column-reverse; align-items:stretch;}
+  .building-editor-action-group{flex-direction:column-reverse;}
+  .building-editor-btn{width:100%;}
+}
+
+#quotation-container{
+  background:var(--surface);
+  border-radius:18px;
+  box-shadow:var(--shadow-xl);
+  width:100%; max-width:1240px; height:90vh; max-height:90vh;
+  display:grid; grid-template-columns:1fr 1fr;
+  border:1px solid var(--border2);
+  overflow:hidden;
+}
+#quotation-form-panel{
+  padding:28px 32px; overflow-y:auto; overflow-x:hidden;
+  border-right:1px solid var(--border);
+  height:100%; box-sizing:border-box;
+  background:linear-gradient(180deg, var(--surface2) 0%, var(--surface) 200px);
+}
+#quotation-preview-panel{
+  padding:28px 32px; overflow-y:auto; overflow-x:hidden;
+  background:var(--surface2); height:100%; box-sizing:border-box;
+}
+#quotation-container h2{
+  color:var(--text); margin-bottom:22px; font-size:18px;
+  font-weight:700; letter-spacing:-.3px;
+  display:flex; align-items:center; gap:10px;
+  padding-bottom:14px; border-bottom:1px solid var(--border);
+}
+
+.quotation-form-group{margin-bottom:16px;}
+.quotation-form-group label{
+  display:block; color:var(--text); font-size:12px;
+  font-weight:700; margin-bottom:7px;
+  text-transform:uppercase; letter-spacing:.6px;
+}
+.quotation-form-group input{
+  width:100%; background:var(--surface3); border:1px solid var(--border);
+  color:var(--text); border-radius:9px; padding:11px 14px;
+  font-size:13px; font-family:inherit;
+  transition:all .18s;
+}
+.quotation-form-group input:focus{
+  outline:none; border-color:var(--accent);
+  background:var(--surface2);
+  box-shadow:0 0 0 3px var(--accent-soft);
+}
+
+.quotation-calc-display{
+  background:var(--grad-accent-soft);
+  border:1px solid color-mix(in oklab, var(--accent) 25%, transparent);
+  border-radius:12px; padding:18px; margin:22px 0;
+}
+.quotation-calc-row{display:flex; justify-content:space-between; margin:8px 0; font-size:13px;}
+.quotation-calc-label{color:var(--text2); font-weight:500;}
+.quotation-calc-value{color:var(--text); font-weight:700; font-variant-numeric:tabular-nums;}
+.quotation-total-row{
+  display:flex; justify-content:space-between;
+  margin:14px 0 0 0; padding-top:14px;
+  border-top:1px dashed var(--border2);
+  font-size:15px; font-weight:800;
+}
+.quotation-total-label{color:var(--text);}
+.quotation-total-value{
+  background:var(--grad-accent); -webkit-background-clip:text; background-clip:text; color:transparent;
+  font-size:18px; font-variant-numeric:tabular-nums;
+}
+
+.quotation-buttons{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:22px;}
+.quotation-btn{
+  padding:12px; border:none; border-radius:9px;
+  font-size:13px; font-weight:700; cursor:pointer;
+  transition:all .18s; font-family:inherit; letter-spacing:.2px;
+}
+.quotation-btn-primary{background:var(--grad-accent); color:#fff; box-shadow:0 4px 14px var(--accent-glow);}
+.quotation-btn-primary:hover{transform:translateY(-2px); box-shadow:0 8px 22px var(--accent-glow);}
+.quotation-btn-secondary{background:linear-gradient(135deg, var(--accent2), var(--accent)); color:#fff;}
+.quotation-btn-secondary:hover{transform:translateY(-2px); box-shadow:0 8px 22px rgba(99,102,241,.35);}
+.quotation-btn-warning{background:linear-gradient(135deg, var(--yellow), #f97316); color:#fff;}
+.quotation-btn-warning:hover{transform:translateY(-2px); box-shadow:0 8px 22px var(--yellow-glow);}
+.quotation-export-buttons{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:16px;}
+
+.quotation-close-btn{
+  background:var(--surface3); color:var(--text2);
+  border:1px solid var(--border); padding:9px 16px;
+  border-radius:9px; cursor:pointer; font-size:13px;
+  transition:all .18s; font-family:inherit; font-weight:600;
+}
+.quotation-close-btn:hover{border-color:var(--red); color:var(--red); background:var(--red-bg);}
+
+#quotation-message{
+  padding:13px 16px; border-radius:9px; margin-bottom:18px;
+  font-size:13px; display:none; font-weight:600;
+}
+#quotation-export-message{
+  padding:13px 16px; border-radius:9px; margin-top:14px;
+  font-size:13px; display:none; font-weight:600;
+}
+#quotation-message.success, #quotation-export-message.success{background:var(--green-bg); color:var(--green); border:1px solid color-mix(in oklab, var(--green) 28%, transparent);}
+#quotation-message.error, #quotation-export-message.error{background:var(--red-bg); color:var(--red); border:1px solid color-mix(in oklab, var(--red) 28%, transparent);}
+
+/* Quotation Preview (kept neutral for print) */
+#quotation-preview{
+  background:#fff; color:#222; padding:24px; border-radius:10px;
+  font-family:'Inter','Arial',sans-serif; font-size:12px;
+  min-height:500px;
+  box-shadow:0 8px 28px rgba(0,0,0,.18);
+}
+.quotation-preview-header{text-align:center; border-bottom:2px solid #0f172a; padding-bottom:16px; margin-bottom:22px;}
+.quotation-preview-title{font-size:20px; font-weight:800; margin-bottom:4px; letter-spacing:-.3px;}
+.quotation-preview-subtitle{font-size:10px; color:#999;}
+.quotation-preview-info{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:22px; font-size:11px;}
+.quotation-preview-block h3{
+  color:#2563eb; font-size:10px; font-weight:800;
+  text-transform:uppercase; margin-bottom:7px; letter-spacing:.8px;
+}
+.quotation-preview-block p{color:#222; margin:3px 0;}
+.quotation-preview-table{width:100%; border-collapse:collapse; margin:22px 0; font-size:11px;}
+.quotation-preview-table thead{background:linear-gradient(135deg,#2563eb,#4f46e5); color:#fff;}
+.quotation-preview-table th{padding:10px; text-align:left; font-weight:700; letter-spacing:.3px;}
+.quotation-preview-table td{padding:9px 10px; border-bottom:1px solid #e5e7eb;}
+.quotation-preview-table tbody tr:nth-child(even){background:#f8fafc;}
+.quotation-amount{text-align:right; font-weight:700; font-variant-numeric:tabular-nums;}
+.quotation-preview-summary{margin:22px 0; border-top:1px solid #e5e7eb; padding-top:16px;}
+.quotation-summary-row{display:flex; justify-content:space-between; margin:6px 0; font-size:11px;}
+.quotation-summary-total{
+  display:flex; justify-content:space-between;
+  margin:12px 0 0 0; padding-top:12px;
+  border-top:2px solid #2563eb;
+  font-size:13px; font-weight:800; color:#2563eb;
+}
+
+@media(max-width:1024px){
+  #quotation-container{grid-template-columns:1fr; grid-template-rows:1fr 1fr; height:92vh;}
+  #quotation-form-panel{border-right:none; border-bottom:1px solid var(--border);}
+}
+@media(max-width:640px){
+  #quotation-modal{padding:8px;}
+  #quotation-container{grid-template-rows:auto 1fr; height:96vh; border-radius:12px;}
+  #quotation-form-panel, #quotation-preview-panel{padding:18px;}
+  #quotation-container h2{font-size:15px;}
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="logo">
+    <img src="https://img2.pic.in.th/NewLogo.png" class="logo-icon" alt="Logo" style="height: 40px; width: auto;">
+    <h1>Permission <span>Next</span></h1>
+  </div>
+  <span class="total-badge" id="total-badge">0</span>
+  <span class="total-badge" id="sync-status" style="background:var(--surface3);color:var(--text2);box-shadow:none;font-weight:600;">กำลังเชื่อมต่อ...</span>
+
+  <div class="search-wrap">
+    <span class="search-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
+    <input id="search-input" type="text" placeholder="ค้นหาอาคาร... ภาษาไทย หรือ English" autocomplete="off"/>
+    <button id="search-clear" title="ล้างการค้นหา"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    <div id="autocomplete"></div>
+  </div>
+
+  <button id="add-building-btn" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg> เพิ่มอาคาร</button>
+  <button id="building-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> อาคาร</button>
+  <button id="theme-btn" title="เปลี่ยนธีม"><svg id="theme-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> <span id="theme-label">Dark</span></button>
+</div>
+
+<!-- FILTER BAR -->
+<div id="filterbar">
+  <button id="filter-toggle" type="button" aria-expanded="true"><svg class="svg-icon chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg><span class="filter-toggle-text">ตัวกรอง</span></button>
+  <div class="filter-controls">
+    <span class="filter-label">กรอง:</span>
+    <select class="flt" id="f-status">
+      <option value="">Status ทั้งหมด</option>
+      <option>Permission Confirmed</option>
+      <option>MOU</option>
+      <option>Check Permission</option>
+      <option>อาคารปิดถาวร</option>
+    </select>
+    <select class="flt" id="f-group">
+      <option value="">Group ทั้งหมด</option>
+      <option>Priority 1</option>
+      <option>Priority 2</option>
+      <option value="X">X</option>
+    </select>
+    <select class="flt" id="f-type">
+      <option value="">Type ทั้งหมด</option>
+      <option>L1</option><option>L2</option><option>L3</option>
+    </select>
+    <select class="flt" id="f-install">
+      <option value="">Install ทั้งหมด</option>
+      <option>Building</option>
+      <option>Shopping Mall</option>
+      <option>Nikom</option>
+      <option>Data center</option>
+      <option>Airport</option>
+      <option>Port</option>
+      <option>Market</option>
+    </select>
+    <select class="flt" id="f-survey">
+      <option value="">Survey ทั้งหมด</option>
+      <option>Auto</option>
+      <option>Need Survey</option>
+      <option>Need Mark</option>
+      <option>Wait Check</option>
+    </select>
+    <select class="flt" id="f-area">
+      <option value="">Area ทั้งหมด</option>
+      <option>BKK1</option><option>BKK2</option><option>BKK3</option><option>BKK4</option>
+      <option>CMI</option><option>CBI</option><option>RYG</option><option>PKT</option><option>SNI</option>
+    </select>
+    <button id="btn-reset">รีเซ็ต</button>
+  </div>
+  <span id="result-count"></span>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div class="map-mode-toggle" id="map-mode-toggle" aria-label="Map mode">
+      <button type="button" class="active" data-mode="map">แผนที่</button>
+      <button type="button" data-mode="satellite">ดาวเทียม</button>
+      <button type="button" data-mode="hybrid">ผสม</button>
+    </div>
+    <div class="map-tools-panel" id="map-tools-panel">
+      <div class="map-tools-actions">
+        <button class="map-tool-btn active" id="legend-toggle" type="button">Legend</button>
+        <button class="map-tool-btn" id="fit-bounds-btn" type="button">Fit Bounds</button>
+      </div>
+      <div class="legend-panel" id="legend-panel">
+        <div class="legend-panel-inner">
+          <div class="legend-row">
+            <span class="legend-name"><span class="legend-pin" style="--legend-color:#22c55e"></span>อนุมัติแล้ว</span>
+            <span class="legend-count" id="legend-confirmed">0</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-name"><span class="legend-pin" style="--legend-color:#a855f7"></span>MOU</span>
+            <span class="legend-count" id="legend-mou">0</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-name"><span class="legend-pin" style="--legend-color:#f59e0b"></span>รอตรวจสอบ</span>
+            <span class="legend-count" id="legend-check">0</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-name"><span class="legend-pin" style="--legend-color:#ef4444"></span>ปิดถาวร</span>
+            <span class="legend-count" id="legend-closed">0</span>
+          </div>
+          <button class="layer-toggle" type="button" data-status-layer="Permission Confirmed" style="--legend-color:#22c55e"><span><span class="layer-toggle-dot"></span> Permission Confirmed</span><span class="layer-state">แสดง</span></button>
+          <button class="layer-toggle" type="button" data-status-layer="MOU" style="--legend-color:#a855f7"><span><span class="layer-toggle-dot"></span> MOU</span><span class="layer-state">แสดง</span></button>
+          <button class="layer-toggle" type="button" data-status-layer="Check Permission" style="--legend-color:#f59e0b"><span><span class="layer-toggle-dot"></span> Check Permission</span><span class="layer-state">แสดง</span></button>
+          <button class="layer-toggle" type="button" data-status-layer="อาคารปิดถาวร" style="--legend-color:#ef4444"><span><span class="layer-toggle-dot"></span> อาคารปิดถาวร</span><span class="layer-state">แสดง</span></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATS OVERLAY -->
+    <div id="statsbar">
+      <div class="stat-card">
+        <div class="sv sv-green" id="st-confirmed">0</div>
+        <div class="sl">Confirmed</div>
+      </div>
+      <div class="stat-card">
+        <div class="sv sv-purple" id="st-mou">0</div>
+        <div class="sl">MOU</div>
+      </div>
+      <div class="stat-card">
+        <div class="sv sv-yellow" id="st-check">0</div>
+        <div class="sl">Check</div>
+      </div>
+      <div class="stat-card">
+        <div class="sv sv-red" id="st-closed">0</div>
+        <div class="sl">Closed</div>
+      </div>
+    </div>
+
+    <!-- HOVER TOOLTIP -->
+    <div id="map-tooltip">
+      <div class="tt-name" id="tt-name"></div>
+      <div class="tt-eng" id="tt-eng"></div>
+      <div class="tt-row" id="tt-row"></div>
+    </div>
+
+    <!-- DETAIL DRAWER -->
+    <div id="drawer-overlay"></div>
+<div id="detail-drawer">
+      <div id="drawer-header">
+        <div class="d-title" id="d-title">—</div>
+        <div class="d-eng" id="d-eng"></div>
+        <div class="d-tags" id="d-tags"></div>
+        <button id="drawer-close" title="ปิด"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      </div>
+      <div id="drawer-body">
+        <div class="drawer-tabs" id="drawer-tabs">
+          <div class="dtab active" data-tab="general">ทั่วไป</div>
+          <div class="dtab" data-tab="contact">ติดต่อ</div>
+          <div class="dtab" data-tab="fee">ค่าธรรมเนียม</div>
+        </div>
+        <div class="tab-panel active" id="tab-general"></div>
+        <div class="tab-panel" id="tab-contact"></div>
+        <div class="tab-panel" id="tab-fee"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <h2>รายการอาคาร</h2>
+      <span id="sb-count"></span>
+    </div>
+    <div id="sidebar-list"></div>
+  </div>
+</div>
+
+<!-- ====== FIREBASE (Firestore) — เชื่อมต่อฐานข้อมูลชื่อ "permission-building" ====== -->
+<!-- ใช้ modular SDK (ไม่ใช่ compat) เพราะจำเป็นต้องระบุชื่อฐานข้อมูล (named database) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import {
+    getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot,
+    writeBatch, getDocs, query, limit, enableIndexedDbPersistence
+  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAHC-sAuMmtqz0LntL4HpMTrvONhCbRzbM",
+    authDomain: "engineering-design-workload.firebaseapp.com",
+    projectId: "engineering-design-workload",
+    storageBucket: "engineering-design-workload.firebasestorage.app",
+    messagingSenderId: "498204601291",
+    appId: "1:498204601291:web:59ec024f8a3f1fb5bba44e",
+    measurementId: "G-Q7K8HKLW7Q"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  // ชื่อฐานข้อมูล Firestore: "permission-building" (ต้องสร้างฐานข้อมูลนี้ไว้ล่วงหน้าใน Firebase Console
+  // ที่ Databases & Storage > Firestore > Add database > Database ID = permission-building)
+  const db = getFirestore(app, "permission-building");
+
+  // เปิด offline cache ไว้ในเครื่อง เผื่อกรณีอินเทอร์เน็ตหลุดชั่วคราว (ยังใช้งานแอปต่อได้)
+  enableIndexedDbPersistence(db, { synchronizeTabs: true }).catch(err => {
+    console.warn('Firestore offline persistence ไม่สามารถเปิดได้:', err.code);
+  });
+
+  const buildingsCol = collection(db, 'buildings');
+
+  // เปิด API ชุดเล็ก ๆ ให้สคริปต์หลัก (classic script) ของแอปเรียกใช้ผ่าน window.FSDB
+  window.FSDB = {
+    newId: () => doc(buildingsCol).id,
+    async isCollectionEmpty() {
+      const snap = await getDocs(query(buildingsCol, limit(1)));
+      return snap.empty;
+    },
+    newBatch: () => writeBatch(db),
+    setInBatch: (batch, id, data) => batch.set(doc(buildingsCol, String(id)), data),
+    commitBatch: (batch) => batch.commit(),
+    setDoc: (id, data) => setDoc(doc(buildingsCol, String(id)), data, { merge: true }),
+    deleteDoc: (id) => deleteDoc(doc(buildingsCol, String(id))),
+    onSnapshot: (onNext, onError) => onSnapshot(buildingsCol, onNext, onError)
+  };
+
+  window.dispatchEvent(new Event('fsdb-ready'));
+</script>
+
+<script>
+// ====== DATA ======
+// ข้อมูลตั้งต้น (912 รายการ) ถูกนำเข้าสู่ Firestore เรียบร้อยแล้ว จึงลบออกจากไฟล์นี้เพื่อลดขนาดไฟล์และความเสี่ยงด้านข้อมูล
+// (ข้อมูลจริงทั้งหมดตอนนี้อยู่ใน Firestore collection 'buildings' เท่านั้น ไม่ได้ฝังอยู่ในไฟล์นี้อีกต่อไป)
+const RAW_DATA = [];
+
+function normalizeBuildingRecord(r) {
+  const item = { ...r };
+  let it = (r.install_type||'').toLowerCase().trim();
+  if (it === 'building') item.install_type = 'Building';
+  else if (['shopping mall','shopping mall (mou)','mall'].includes(it)) item.install_type = 'Shopping Mall';
+  else if (['nikom','nikom (mou)'].includes(it)) item.install_type = 'Nikom';
+  else if (it === 'data center') item.install_type = 'Data center';
+  else if (it === 'market') item.install_type = 'Market';
+  else if (it === 'airport') item.install_type = 'Airport';
+  else if (it === 'port') item.install_type = 'Port';
+  let area = (item.area||'').trim().toUpperCase().replace('ฺ','');
+  item.area = area;
+  item._searchText = `${item.name_th||''} ${item.name_eng||''} ${item.location||''}`.toLowerCase();
+  item._nameSearchText = `${item.name_th||''} ${item.name_eng||''}`.toLowerCase();
+  return item;
+}
+
+// ====== FIREBASE / FIRESTORE ======
+// การเชื่อมต่อ Firestore จริง ๆ ถูกตั้งค่าไว้ในบล็อก JS module ด้านบนสุดของไฟล์ (ก่อนแท็ก script หลักนี้)
+// (ต้องใช้ modular SDK เพราะฐานข้อมูลนี้เป็น "named database" ชื่อ permission-building ไม่ใช่ (default))
+// สคริปต์นั้นจะ expose ฟังก์ชันที่จำเป็นไว้ที่ window.FSDB แล้วยิง event 'fsdb-ready' เมื่อพร้อม
+
+let DATA = [];
+let firestoreUnsub = null;
+
+function whenFsdbReady(callback) {
+  if (window.FSDB) { callback(); return; }
+  window.addEventListener('fsdb-ready', callback, { once: true });
+}
+
+function setSyncStatus(text, isError = false) {
+  const el = document.getElementById('sync-status');
+  if (el) {
+    el.textContent = text;
+    el.style.color = isError ? 'var(--red)' : 'var(--text2)';
+  }
+  if (isError) console.warn('[Firestore]', text);
+  else console.log('[Firestore]', text);
+}
+
+function stripInternalFields(rec) {
+  const clean = { ...rec };
+  delete clean._searchText;
+  delete clean._nameSearchText;
+  return clean;
+}
+
+// ------ นำเข้าข้อมูลเดิม (RAW_DATA) เข้า Firestore ครั้งแรกเท่านั้น ------
+// ถ้าคอลเลกชัน 'buildings' มีข้อมูลอยู่แล้ว จะไม่ทำการ seed ซ้ำ
+async function migrateRawDataIfEmpty() {
+  if (!RAW_DATA.length) {
+    // ไม่มีข้อมูลตั้งต้นฝังอยู่ในไฟล์นี้แล้ว (ถูกลบออกหลังจากนำเข้า Firestore สำเร็จ)
+    // ระบบจะใช้ข้อมูลจาก Firestore เพียงอย่างเดียวเท่านั้น
+    return false;
+  }
+
+  const isEmpty = await window.FSDB.isCollectionEmpty();
+  if (!isEmpty) return false;
+
+  setSyncStatus('กำลังนำเข้าข้อมูลเริ่มต้น ' + RAW_DATA.length + ' รายการ...');
+  const records = RAW_DATA.map(normalizeBuildingRecord);
+  const usedIds = new Set();
+  let autoIdCounter = Math.max(0, ...records.map(r => Number(r.id) || 0)) + 1;
+
+  const chunkSize = 400; // Firestore batch จำกัด 500 operations/ครั้ง
+  for (let i = 0; i < records.length; i += chunkSize) {
+    const batch = window.FSDB.newBatch();
+    records.slice(i, i + chunkSize).forEach(rec => {
+      let id = rec.id;
+      if (id === null || id === undefined || usedIds.has(String(id))) {
+        id = autoIdCounter++;
+      }
+      usedIds.add(String(id));
+      window.FSDB.setInBatch(batch, id, stripInternalFields({ ...rec, id }));
+    });
+    await window.FSDB.commitBatch(batch);
+    setSyncStatus(`กำลังนำเข้าข้อมูล... (${Math.min(i + chunkSize, records.length)}/${records.length})`);
+  }
+  setSyncStatus('นำเข้าข้อมูลเริ่มต้นสำเร็จ');
+  return true;
+}
+
+// ------ ซิงค์ข้อมูลแบบ real-time: ทุกครั้งที่มีคนแก้ไข/เพิ่ม/ลบ ทุก client จะเห็นทันที ------
+function startRealtimeSync() {
+  if (firestoreUnsub) firestoreUnsub();
+  firestoreUnsub = window.FSDB.onSnapshot(
+    snapshot => {
+      DATA = snapshot.docs.map(docSnap => {
+        const raw = docSnap.data();
+        if (raw.id === undefined || raw.id === null || raw.id === '') raw.id = docSnap.id;
+        return normalizeBuildingRecord(raw);
+      });
+      setSyncStatus('ซิงค์ล่าสุด ' + new Date().toLocaleTimeString('th-TH'));
+      applyFilters();
+    },
+    err => {
+      console.error('Firestore sync error:', err);
+      setSyncStatus('เชื่อมต่อ Firestore ไม่สำเร็จ: ' + err.message, true);
+    }
+  );
+}
+
+async function initFirestoreData() {
+  try {
+    setSyncStatus('กำลังเชื่อมต่อ Firestore...');
+    await migrateRawDataIfEmpty();
+  } catch (err) {
+    console.error('Migrate error:', err);
+    setSyncStatus('นำเข้าข้อมูลเริ่มต้นไม่สำเร็จ: ' + err.message, true);
+  }
+  startRealtimeSync();
+}
+
+whenFsdbReady(initFirestoreData);
+
+if (typeof L === 'undefined') {
+  const mapEl = document.getElementById('map');
+  if (mapEl) {
+    mapEl.innerHTML = `
+      <div class="map-error">
+        <div class="map-error-box">
+          <strong>ไม่สามารถโหลดแผนที่ได้</strong><br>
+          กรุณาตรวจสอบอินเทอร์เน็ต หรือเปิดใช้งานไฟล์ Leaflet ให้พร้อมก่อนใช้งาน
+        </div>
+      </div>`;
+  }
+  throw new Error('Leaflet library failed to load');
+}
+
+// ====== THEME ======
+let isDark = true;
+const themeBtn = document.getElementById('theme-btn');
+let tileLayer;
+let mapMode = 'map';
+
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  const ico = document.getElementById('theme-ico');
+  const lbl = document.getElementById('theme-label');
+  if(ico && lbl){
+    lbl.textContent = isDark ? 'Dark' : 'Light';
+    ico.innerHTML = isDark
+      ? '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'
+      : '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+  }
+  if (tileLayer) {
+    map.removeLayer(tileLayer);
+    tileLayer = makeTile().addTo(map);
+  }
+}
+
+function makeTile() {
+  if (mapMode === 'satellite') {
+    return L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { attribution: 'Tiles © Esri', maxZoom: 19 }
+    );
+  }
+  if (mapMode === 'hybrid') {
+    return L.layerGroup([
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Tiles © Esri', maxZoom: 19
+      }),
+      L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Labels © Esri', maxZoom: 19
+      })
+    ]);
+  }
+  return L.tileLayer(
+    isDark
+      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    { attribution: '© OpenStreetMap © Carto', maxZoom: 19 }
+  );
+}
+
+themeBtn.addEventListener('click', () => { isDark = !isDark; applyTheme(); });
+document.getElementById('map-mode-toggle')?.addEventListener('click', e => {
+  const btn = e.target.closest('button[data-mode]');
+  if (!btn) return;
+  mapMode = btn.dataset.mode;
+  document.querySelectorAll('#map-mode-toggle button').forEach(b => b.classList.toggle('active', b === btn));
+  if (tileLayer) map.removeLayer(tileLayer);
+  tileLayer = makeTile().addTo(map);
+});
+
+// ====== MAP ======
+const map = L.map('map', { center: [13.75, 100.52], zoom: 11, zoomControl: true });
+tileLayer = makeTile().addTo(map);
+
+// ====== MARKER COLORS ======
+function statusColor(s) {
+  if (s === 'Permission Confirmed') return '#22c55e';
+  if (s === 'MOU') return '#a855f7';
+  if (s === 'อาคารปิดถาวร') return '#ef4444';
+  return '#f59e0b';
+}
+function makeIcon(color, isSelected) {
+  const width = isSelected ? 42 : 34;
+  const height = isSelected ? 52 : 42;
+  return L.divIcon({
+    className: '',
+    html: `<div class="pm-marker ${isSelected ? 'selected' : ''}" style="--marker-color:${color}">
+      <svg width="${width}" height="${height}" viewBox="0 0 34 42" aria-hidden="true">
+        <path class="pin-shell" d="M17 1.75c8.2 0 14.85 6.35 14.85 14.18 0 9.75-11.02 21.22-14.1 24.23a1.08 1.08 0 0 1-1.5 0C13.17 37.15 2.15 25.68 2.15 15.93 2.15 8.1 8.8 1.75 17 1.75Z"/>
+        <circle class="pin-core" cx="17" cy="16" r="8.2"/>
+        <circle class="pin-glint" cx="14.4" cy="13.25" r="2.05"/>
+      </svg>
+    </div>`,
+    iconSize: [width, height], iconAnchor: [width / 2, height - 2], popupAnchor: [0, -height + 8]
+  });
+}
+
+// ====== TOOLTIP ======
+const tooltip = document.getElementById('map-tooltip');
+
+function showTooltip(x, y, r) {
+  document.getElementById('tt-name').textContent = r.name_th || '—';
+  document.getElementById('tt-eng').textContent = r.name_eng || '';
+  document.getElementById('tt-row').innerHTML = `
+    <span class="tag ${statusTag(r.status)}">${esc(r.status||'')}</span>
+    ${r.area ? `<span class="tag tag-neutral">${esc(r.area)}</span>` : ''}
+    ${r.type ? `<span class="tag ${typeTag(r.type)}">${esc(r.type)}</span>` : ''}
+  `;
+  tooltip.style.display = 'block';
+  posTooltip(x, y);
+}
+function posTooltip(x, y) {
+  const tw = tooltip.offsetWidth, th = tooltip.offsetHeight;
+  const mw = document.getElementById('map-wrap').offsetWidth;
+  const mh = document.getElementById('map-wrap').offsetHeight;
+  let left = x + 14, top = y - th / 2;
+  if (left + tw > mw - 10) left = x - tw - 14;
+  if (top < 10) top = 10;
+  if (top + th > mh - 10) top = mh - th - 10;
+  tooltip.style.left = left + 'px';
+  tooltip.style.top = top + 'px';
+}
+function hideTooltip() { tooltip.style.display = 'none'; }
+
+// ====== DETAIL DRAWER ======
+let selectedId = null;
+let allMarkers = [];
+const statusLayerSet = new Set(['Permission Confirmed', 'MOU', 'Check Permission', 'อาคารปิดถาวร']);
+let lastRenderedData = DATA;
+
+function statusTag(s) {
+  if (s === 'Permission Confirmed') return 'tag-confirmed';
+  if (s === 'MOU') return 'tag-mou';
+  if (s === 'อาคารปิดถาวร') return 'tag-closed';
+  return 'tag-check';
+}
+function groupTag(g) {
+  if (g === 'Priority 1') return 'tag-p1';
+  if (g === 'Priority 2') return 'tag-p2';
+  return 'tag-x';
+}
+function typeTag(t) {
+  if (t === 'L1') return 'tag-l1';
+  if (t === 'L2') return 'tag-l2';
+  if (t === 'L3') return 'tag-l3';
+  return 'tag-neutral';
+}
+function canCalculateQuotation(status) {
+  return !['MOU', 'อาคารปิดถาวร'].includes(String(status || '').trim());
+}
+function isStatusLayerVisible(status) {
+  if (!statusLayerSet.has(status)) return true;
+  const btn = [...document.querySelectorAll('.layer-toggle')].find(el => el.dataset.statusLayer === status);
+  return btn?.classList.contains('off') !== true;
+}
+function updateLegendCounts(data) {
+  document.getElementById('legend-confirmed').textContent = data.filter(r=>r.status==='Permission Confirmed').length;
+  document.getElementById('legend-mou').textContent = data.filter(r=>r.status==='MOU').length;
+  document.getElementById('legend-check').textContent = data.filter(r=>r.status==='Check Permission').length;
+  document.getElementById('legend-closed').textContent = data.filter(r=>r.status==='อาคารปิดถาวร').length;
+}
+function fitVisibleMarkers() {
+  const points = allMarkers.map(({marker}) => marker.getLatLng()).filter(Boolean);
+  if (!points.length) return;
+  if (points.length === 1) {
+    map.setView(points[0], Math.max(map.getZoom(), 16), { animate: true });
+    return;
+  }
+  map.fitBounds(L.latLngBounds(points).pad(0.14), { animate: true, maxZoom: 16 });
+}
+function fmt(v, pre='฿') {
+  if (v === null || v === undefined || v === '' || v === 0) return '—';
+  const n = Number(v);
+  if (isNaN(n)) return v;
+  return pre + n.toLocaleString('th-TH');
+}
+function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function attrEsc(s) { return esc(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function mapHref(r) {
+  const lat = Number(r.lat);
+  const lng = Number(r.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return '';
+  return `https://maps.google.com/?q=${lat},${lng}`;
+}
+function coordText(r) {
+  const lat = Number(r.lat);
+  const lng = Number(r.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return '';
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+}
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  ta.remove();
+}
+function svgIcon(name, cls = 'svg-icon') {
+  const icons = {
+    alert: '<path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17h.01"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+    vertical: '<path d="M12 3v18"/><path d="m7 8 5-5 5 5"/><path d="m7 16 5 5 5-5"/>',
+    horizontal: '<path d="M3 12h18"/><path d="m8 7-5 5 5 5"/><path d="m16 7 5 5-5 5"/>',
+    ruler: '<path d="M4 17 17 4l3 3L7 20l-3-3Z"/><path d="m14 7 3 3"/><path d="m11 10 2 2"/><path d="m8 13 3 3"/>',
+    file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/>',
+    image: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="10" r="1.5"/><path d="m21 15-5-5L5 19"/>',
+    calc: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 11h.01"/><path d="M12 11h.01"/><path d="M16 11h.01"/><path d="M8 15h.01"/><path d="M12 15h.01"/><path d="M16 15h.01"/>',
+    reset: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v6h6"/>',
+    clip: '<path d="M9 3h6l2 2v3H7V5l2-2Z"/><path d="M7 8h10v13H7z"/><path d="M9 13h6"/><path d="M9 17h6"/>',
+    eye: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="3"/>'
+  };
+  return `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${icons[name] || icons.alert}</svg>`;
+}
+function iconText(name, text) {
+  return `${svgIcon(name)}<span>${esc(text)}</span>`;
+}
+function formatPhone(p) {
+  const raw = String(p).trim();
+  if (!raw || raw === '-') return raw;
+
+  // แยก extension ออกจากเบอร์หลัก: #XXXX, ext.XXXX, ext XXXX, ต่อ XXXX, ·XXXX
+  const extMatch = raw.match(/^(.+?)\s*(?:#|ext\.?\s*|ต่อ\s*|·\s*)\s*([\d,]+)\s*$/i);
+
+  let mainPart, extPart;
+  if (extMatch) {
+    mainPart = extMatch[1].trim();
+    extPart = extMatch[2].trim();
+  } else {
+    mainPart = raw;
+    extPart = null;
+  }
+
+  // เอาเฉพาะตัวเลขและ + (กรณี +66)
+  let digits = mainPart.replace(/[^\d+]/g, "");
+  digits = digits.replace(/^\+66/, "0");
+  if (digits && !digits.startsWith("0") && !digits.startsWith("+")) digits = "0" + digits;
+
+  let display;
+  if (/^02/.test(digits) && digits.length === 9) {
+    // กทม. 9 หลัก: 02-XXXX-XXXX
+    display = "02-" + digits.slice(2,6) + "-" + digits.slice(6);
+  } else if (/^0[3-9]\d/.test(digits) && (digits.length === 8 || digits.length === 9)) {
+    // ต่างจังหวัด: 0XX-XXX-XX หรือ 0XX-XXX-XXX
+    display = digits.slice(0,3) + "-" + digits.slice(3,6) + "-" + digits.slice(6);
+  } else if (/^0[689]\d/.test(digits) && digits.length === 10) {
+    // มือถือ 10 หลัก: 0XX-XXX-XXXX
+    display = digits.slice(0,3) + "-" + digits.slice(3,6) + "-" + digits.slice(6);
+  } else {
+    display = digits || raw;
+  }
+
+  // ต่อ extension (ใช้ "ต่อ" เป็น standard)
+  if (extPart) {
+    const exts = extPart.split(",").map(x => x.trim()).filter(Boolean);
+    display += " ต่อ " + exts.join(", ");
+  }
+
+  return display;
+}
+
+function formatPhoneTelLink(p) {
+  const raw = String(p).trim();
+  if (!raw || raw === '-') return { display: raw, tel: '' };
+
+  const extMatch = raw.match(/^(.+?)\s*(?:#|ext\.?\s*|ต่อ\s*|·\s*)\s*([\d,]+)\s*$/i);
+  let mainPart = extMatch ? extMatch[1].trim() : raw;
+
+  let digits = mainPart.replace(/[^\d+]/g, "");
+  digits = digits.replace(/^\+66/, "0");
+  if (digits && !digits.startsWith("0") && !digits.startsWith("+")) digits = "0" + digits;
+
+  return { display: formatPhone(p), tel: digits };
+}
+
+function openDrawer(r) {
+  selectedId = r.id;
+  const buildingMapHref = mapHref(r);
+  const buildingCoordText = coordText(r);
+
+  // Update sidebar selection
+  document.querySelectorAll('.list-item').forEach(el => {
+    el.classList.toggle('selected', String(el.dataset.id) === String(r.id));
+  });
+  const sel = document.querySelector('.list-item[data-id="'+r.id+'"]');
+  if (sel) sel.scrollIntoView({ block:'nearest', behavior:'smooth' });
+
+  // Update marker sizes
+  allMarkers.forEach(({marker, data:d}) => {
+    marker.setIcon(makeIcon(statusColor(d.status), d.id === r.id));
+  });
+
+  // Header
+  document.getElementById('d-title').textContent = r.name_th || '—';
+  document.getElementById('d-eng').textContent = r.name_eng || '';
+  document.getElementById('d-tags').innerHTML = `
+    <span class="tag ${statusTag(r.status)}">${esc(r.status||'—')}</span>
+    <span class="tag ${groupTag(r.group)}">${esc(r.group||'—')}</span>
+    ${r.survey_type ? `<span class="tag tag-neutral">${esc(r.survey_type)}</span>` : ''}
+    ${r.type ? `<span class="tag ${typeTag(r.type)}">${esc(r.type)}</span>` : ''}
+    ${r.install_type ? `<span class="tag tag-neutral">${esc(r.install_type)}</span>` : ''}
+  `;
+
+  // Tab: General
+  document.getElementById('tab-general').innerHTML = `
+    <div class="section-head" style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <span>ข้อมูลอาคาร</span>
+      <button class="edit-building-btn" type="button" data-building-id="${attrEsc(r.id)}" style="border:1px solid var(--border2);background:var(--surface2);color:var(--text2);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px;">แก้ไขข้อมูล</button>
+    </div>
+    <div class="info-grid">
+      <div class="info-cell"><label>Area</label><p>${esc(r.area||'—')}</p></div>
+      <div class="info-cell"><label>จังหวัด</label><p>${esc(r.province||'—')}</p></div>
+      <div class="info-cell"><label>ทำเล / โซน</label><p>${esc(r.location||'—')}</p></div>
+      <div class="info-cell"><label>ระยะ Permission</label><p>${r.duration ? esc(r.duration)+' วัน' : '—'}</p></div>
+      <div class="info-cell"><label>อัปเดตล่าสุด</label><p>${esc(r.update_date||'—')}</p></div>
+      <div class="info-cell"><label>WM Point</label><p>${esc(r.wm_point||'—')}</p></div>
+      <div class="info-cell"><label>Enclosure</label><p>${esc(r.enclosure||'—')}</p></div>
+      <div class="info-cell"><label>Max H-Wire (ม.)</label><p>${esc(r.max_horizontal||'—')}</p></div>
+      ${r.address ? `<div class="info-cell full"><label>ที่อยู่</label><p style="font-size:12px;line-height:1.6;color:var(--text2)">${esc(r.address)}${buildingMapHref ? ` <a href="${attrEsc(buildingMapHref)}" target="_blank" rel="noopener" style="font-size:11px;margin-left:6px">ดูแผนที่</a>` : ''}</p></div>` : ''}
+      ${buildingMapHref ? `<div class="info-cell"><label>พิกัด</label><p class="coord-row"><a href="${attrEsc(buildingMapHref)}" target="_blank" rel="noopener">${esc(buildingCoordText)}</a><button class="copy-coord-btn" type="button" data-copy-coord="${attrEsc(buildingCoordText)}">${svgIcon('clip')}<span>คัดลอก</span></button></p></div>` : ''}
+      ${r.remark ? `<div class="info-cell full"><div class="remark-box">${esc(r.remark)}</div></div>` : ''}
+      ${canCalculateQuotation(r.status) ? `
+      <div class="info-cell full" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border);">
+        <button class="quotation-open-btn" data-building-id="${attrEsc(r.id)}" style="width: 100%; padding: 12px; background: var(--green); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .18s; font-family: inherit;">ประเมินราคาเบื้องต้น</button>
+      </div>` : ''}
+    </div>
+  `;
+
+  // Tab: Contact
+  const contacts = (String(r.contact||'')).split(/[,\/]/).map(s=>s.trim()).filter(Boolean);
+  const phones = (String(r.phone||'')).split(/[,\/]/).map(s=>s.trim()).filter(Boolean);
+  const mobiles = (String(r.mobile||'')).split(/[,\/]/).map(s=>s.trim()).filter(Boolean);
+  const emails = (String(r.email||'')).split(/[,;]/).map(s=>s.trim()).filter(Boolean);
+  document.getElementById('tab-contact').innerHTML = `
+    <div class="section-head">ผู้ติดต่อ</div>
+    <div class="contact-card">
+      <div class="contact-name">${contacts.length ? contacts.map(esc).join(' / ') : '—'}</div>
+      ${phones.length ? `<div class="contact-row"><span class="ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.84 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.15a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span><span class="val">${phones.map(p=>{const r=formatPhoneTelLink(p); return r.tel ? `<a href="tel:${attrEsc(r.tel)}">${esc(r.display)}</a>` : `<span>${esc(r.display)}</span>`;}).join('<br>')}</span></div>` : ''}
+      ${mobiles.length ? `<div class="contact-row"><span class="ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></span><span class="val">${mobiles.map(m=>{const r=formatPhoneTelLink(m); return r.tel ? `<a href="tel:${attrEsc(r.tel)}">${esc(r.display)}</a>` : `<span>${esc(r.display)}</span>`;}).join('<br>')}</span></div>` : ''}
+      ${emails.length ? `<div class="contact-row"><span class="ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span><span class="val">${emails.map(e=>`<a href="mailto:${attrEsc(e)}">${esc(e)}</a>`).join('<br>')}</span></div>` : ''}
+      ${!contacts.length && !phones.length && !mobiles.length && !emails.length ? '<p style="color:var(--muted);font-size:13px">ไม่มีข้อมูลผู้ติดต่อ</p>' : ''}
+    </div>
+  `;
+
+  // Tab: Fee
+  const standardFeeRows = [
+    ['ค่าเสียหาย (Damage Deposit)', r.damage_deposit],
+    ['ค่ามัดจำสัญญา (Contract Deposit)', r.contract_deposit],
+    ['ค่าประกัน (Insurance)', r.insurance_fee],
+    ['ค่าหลัก (Main Fee)', r.main_fee],
+    ['ค่าบริการรายปี (Annual Fee)', r.annual_fee],
+    ['ค่าประสานงาน (Coordination)', r.coordination_fee],
+    ['ค่า Shaft ต่อชั้น', r.shaft_fee_per_floor],
+    ['ค่าวางสาย Horizontal /ม.', r.horizontal_fee],
+  ].filter(([,v]) => v !== null && v !== undefined && v !== 0 && v !== '');
+  const otherFeeRows = normalizeOtherFees(r.other_fees).map(item => [
+    item.label || 'ค่าใช้จ่ายเพิ่มเติม',
+    item.amount,
+    item.note
+  ]);
+  const feeRows = [...standardFeeRows, ...otherFeeRows];
+
+  const totalFee = feeRows.reduce((sum,[,v]) => sum + (Number(v)||0), 0);
+
+  document.getElementById('tab-fee').innerHTML = feeRows.length
+    ? `<div class="section-head">ค่าธรรมเนียม</div>
+       <table class="fee-table">
+         ${feeRows.map(([l,v,n]) => `<tr><td>${esc(l)}${n ? `<br><span style="font-size:11px;color:var(--muted);font-weight:600">${esc(n)}</span>` : ''}</td><td>${esc(fmt(v))}</td></tr>`).join('')}
+         ${totalFee > 0 ? `<tr class="fee-total-row"><td>รวมทั้งหมด</td><td>${fmt(totalFee)}</td></tr>` : ''}
+       </table>`
+    : `<div class="no-fee">ไม่มีข้อมูลค่าธรรมเนียม</div>`;
+
+  // Reset to first tab
+  switchTab('general');
+}
+window.openDrawer = openDrawer;
+
+function switchTab(name) {
+  document.querySelectorAll('.dtab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-'+name));
+}
+
+document.getElementById('drawer-tabs').addEventListener('click', e => {
+  const tab = e.target.closest('.dtab');
+  if (tab) switchTab(tab.dataset.tab);
+});
+document.getElementById('tab-general').addEventListener('click', e => {
+  const copyBtn = e.target.closest('.copy-coord-btn');
+  if (copyBtn) {
+    copyText(copyBtn.dataset.copyCoord || '').then(() => {
+      const label = copyBtn.querySelector('span');
+      copyBtn.classList.add('copied');
+      if (label) label.textContent = 'คัดลอกแล้ว';
+      setTimeout(() => {
+        copyBtn.classList.remove('copied');
+        if (label) label.textContent = 'คัดลอก';
+      }, 1600);
+    });
+    return;
+  }
+  const editBtn = e.target.closest('.edit-building-btn');
+  if (editBtn) {
+    const record = DATA.find(d => String(d.id) === String(editBtn.dataset.buildingId));
+    openBuildingEditor(record || null);
+    return;
+  }
+  const btn = e.target.closest('.quotation-open-btn');
+  if (btn) quickCalculateQuotation(btn.dataset.buildingId);
+});
+document.addEventListener('click', e => {
+  const btn = e.target.closest('.lf-popup-action');
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  openDrawerById(btn.dataset.popupBuildingId);
+});
+
+// drawer-close handled by modal manager below
+
+// ====== LAYER GROUP ======
+const layerGroup = (L.markerClusterGroup ? L.markerClusterGroup({
+  showCoverageOnHover: false,
+  maxClusterRadius: 46,
+  spiderfyOnMaxZoom: true,
+  iconCreateFunction(cluster) {
+    return L.divIcon({
+      html: `<div class="pm-cluster">${cluster.getChildCount()}</div>`,
+      className: 'marker-cluster',
+      iconSize: [42, 42],
+      iconAnchor: [21, 21]
+    });
+  }
+}) : L.layerGroup()).addTo(map);
+
+function openDrawerById(id) {
+  const r = DATA.find(d => String(d.id) === String(id));
+  map.closePopup();
+  if (r) window.openDrawer(r);
+}
+
+function buildMarkerPopup(r) {
+  const color = statusColor(r.status);
+  return `
+    <div class="lf-popup-premium" style="--popup-color:${color}">
+      <div class="lf-popup-head">
+        <span class="lf-popup-dot"></span>
+        <div>
+          <div class="lf-popup-title">${esc(r.name_th||'—')}</div>
+          <div class="lf-popup-sub">${esc(r.name_eng||'')}${r.area ? ` · ${esc(r.area)}` : ''}</div>
+        </div>
+      </div>
+      <div class="lf-popup-body">
+        <div class="lf-popup-tags">
+          <span class="tag ${statusTag(r.status)}">${esc(r.status||'—')}</span>
+          ${r.type ? `<span class="tag ${typeTag(r.type)}">${esc(r.type)}</span>` : ''}
+          ${r.install_type ? `<span class="tag tag-neutral">${esc(r.install_type)}</span>` : ''}
+        </div>
+        <button class="lf-popup-action" type="button" data-popup-building-id="${attrEsc(r.id)}">ดูรายละเอียด</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderMarkers(data) {
+  layerGroup.clearLayers();
+  allMarkers = [];
+  const usedCoords = {};
+  data.filter(r => isStatusLayerVisible(r.status)).forEach(r => {
+    const lat = parseFloat(r.lat);
+    const lng = parseFloat(r.lng);
+    if (!lat || !lng || lat < 5 || lat > 25) return;
+    
+    let mapLat = lat;
+    let mapLng = lng;
+    const coordKey = `${mapLat.toFixed(5)},${mapLng.toFixed(5)}`;
+    
+    if (usedCoords[coordKey] !== undefined) {
+      usedCoords[coordKey]++;
+      const offsetCount = usedCoords[coordKey];
+      // กระจายจุดที่ซ้อนกัน (Jitter)
+      const angle = offsetCount * Math.PI / 4;
+      const radius = 0.00015 + (offsetCount * 0.00005);
+      mapLat += radius * Math.cos(angle);
+      mapLng += radius * Math.sin(angle);
+    } else {
+      usedCoords[coordKey] = 0;
+    }
+
+    const marker = L.marker([mapLat, mapLng], {
+      icon: makeIcon(statusColor(r.status), r.id === selectedId)
+    }).bindPopup(buildMarkerPopup(r), { closeButton: true, minWidth: 230, maxWidth: 280 });
+
+    // Hover tooltip (mouseover/mouseout)
+    marker.on('mouseover', function(e) {
+      const mp = document.getElementById('map-wrap').getBoundingClientRect();
+      const px = e.originalEvent.clientX - mp.left;
+      const py = e.originalEvent.clientY - mp.top;
+      showTooltip(px, py, r);
+    });
+    marker.on('mousemove', function(e) {
+      const mp = document.getElementById('map-wrap').getBoundingClientRect();
+      posTooltip(e.originalEvent.clientX - mp.left, e.originalEvent.clientY - mp.top);
+    });
+    marker.on('mouseout', hideTooltip);
+
+    // Click → open drawer
+    marker.on('click', function() {
+      hideTooltip();
+      marker.openPopup();
+    });
+
+    layerGroup.addLayer(marker);
+    allMarkers.push({ marker, data: r });
+  });
+}
+
+function render(data) {
+  lastRenderedData = data;
+
+  const conf = data.filter(r=>r.status==='Permission Confirmed').length;
+  const mou  = data.filter(r=>r.status==='MOU').length;
+  const chk  = data.filter(r=>r.status==='Check Permission').length;
+  const closed = data.filter(r=>r.status==='อาคารปิดถาวร').length;
+  document.getElementById('st-confirmed').textContent = conf;
+  document.getElementById('st-mou').textContent = mou;
+  document.getElementById('st-check').textContent = chk;
+  document.getElementById('st-closed').textContent = closed;
+  document.getElementById('total-badge').textContent = data.length;
+  document.getElementById('result-count').textContent = `แสดง ${data.length} รายการ`;
+  document.getElementById('sb-count').textContent = data.length + ' รายการ';
+  updateLegendCounts(data);
+
+  // Sidebar list
+  const list = document.getElementById('sidebar-list');
+  list.innerHTML = '';
+  const listFrag = document.createDocumentFragment();
+  data.forEach(r => {
+    const el = document.createElement('div');
+    el.className = 'list-item' + (r.id === selectedId ? ' selected' : '');
+    el.dataset.id = r.id;
+    el.innerHTML = `
+      <div class="li-name">${esc(r.name_th||'—')}</div>
+      <div class="li-eng">${esc(r.name_eng||'')}</div>
+      <div class="li-meta">
+        <span class="tag ${statusTag(r.status)}">${esc(r.status||'—')}</span>
+        <span class="tag ${groupTag(r.group)}">${esc(r.group||'—')}</span>
+        ${r.area ? `<span class="tag tag-neutral">${esc(r.area)}</span>` : ''}
+        ${r.install_type ? `<span class="tag tag-neutral">${esc(r.install_type)}</span>` : ''}
+      </div>`;
+    el.addEventListener('click', () => {
+      openDrawer(r);
+      if (r.lat && r.lng) map.setView([r.lat, r.lng], 15, {animate: true});
+    });
+    listFrag.appendChild(el);
+  });
+  list.appendChild(listFrag);
+
+  renderMarkers(data);
+}
+
+// ====== FILTERS ======
+function getFiltered() {
+  const q = document.getElementById('search-input').value.toLowerCase().trim();
+  const fStatus  = document.getElementById('f-status').value;
+  const fGroup   = document.getElementById('f-group').value;
+  const fType    = document.getElementById('f-type').value;
+  const fInstall = document.getElementById('f-install').value;
+  const fSurvey  = document.getElementById('f-survey').value;
+  const fArea    = document.getElementById('f-area').value;
+
+  document.querySelectorAll('.flt').forEach(s => s.classList.toggle('active', !!s.value));
+
+  return DATA.filter(r => {
+    if (q) {
+      if (!r._searchText.includes(q)) return false;
+    }
+    if (fStatus && r.status !== fStatus) return false;
+    if (fGroup === 'X' && r.group !== 'X') return false;
+    if (fGroup && fGroup !== 'X' && r.group !== fGroup) return false;
+    if (fType && r.type !== fType) return false;
+    if (fInstall && r.install_type !== fInstall) return false;
+    if (fSurvey && r.survey_type !== fSurvey) return false;
+    if (fArea && r.area !== fArea) return false;
+    return true;
+  });
+}
+
+function applyFilters() { render(getFiltered()); }
+
+function debounce(fn, delay = 160) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), delay);
+  };
+}
+
+const applyFiltersDebounced = debounce(applyFilters, 160);
+
+document.querySelectorAll('.flt').forEach(s => s.addEventListener('change', applyFilters));
+document.getElementById('filter-toggle')?.addEventListener('click', e => {
+  const filterbar = document.getElementById('filterbar');
+  const collapsed = filterbar.classList.toggle('filters-collapsed');
+  e.currentTarget.setAttribute('aria-expanded', String(!collapsed));
+  const label = e.currentTarget.querySelector('.filter-toggle-text');
+  if (label) label.textContent = collapsed ? 'แสดงตัวกรอง' : 'ตัวกรอง';
+  setTimeout(() => map.invalidateSize(), 240);
+});
+document.getElementById('legend-toggle')?.addEventListener('click', e => {
+  const panel = document.getElementById('legend-panel');
+  const collapsed = panel.classList.toggle('collapsed');
+  e.currentTarget.classList.toggle('active', !collapsed);
+});
+document.getElementById('fit-bounds-btn')?.addEventListener('click', fitVisibleMarkers);
+document.querySelectorAll('.layer-toggle').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const off = btn.classList.toggle('off');
+    const state = btn.querySelector('.layer-state');
+    if (state) state.textContent = off ? 'ซ่อน' : 'แสดง';
+    renderMarkers(lastRenderedData);
+  });
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-clear').style.display = 'none';
+  document.querySelectorAll('.flt').forEach(s => { s.value = ''; s.classList.remove('active'); });
+  document.querySelectorAll('.layer-toggle').forEach(btn => {
+    btn.classList.remove('off');
+    const state = btn.querySelector('.layer-state');
+    if (state) state.textContent = 'แสดง';
+  });
+  document.getElementById('autocomplete').style.display = 'none';
+  applyFilters();
+});
+
+// ====== AUTOCOMPLETE ======
+const searchInput = document.getElementById('search-input');
+const ac = document.getElementById('autocomplete');
+const searchClear = document.getElementById('search-clear');
+
+searchInput.addEventListener('input', () => {
+  const q = searchInput.value.toLowerCase().trim();
+  searchClear.style.display = q ? 'block' : 'none';
+  applyFiltersDebounced();
+  if (q.length < 1) { ac.style.display = 'none'; return; }
+  const matches = DATA.filter(r =>
+    r._nameSearchText.includes(q)
+  ).slice(0, 10);
+  if (!matches.length) { ac.style.display = 'none'; return; }
+  ac.innerHTML = matches.map(r => `
+    <div class="ac-item" data-id="${attrEsc(r.id)}">
+      <div class="ac-dot" style="background:${statusColor(r.status)}"></div>
+      <div class="ac-texts">
+        <div class="ac-th">${esc(r.name_th||'—')}</div>
+        <div class="ac-en">${esc(r.name_eng||'')} · ${esc(r.area||'')} · ${esc(r.status||'')}</div>
+      </div>
+    </div>`).join('');
+  ac.style.display = 'block';
+  ac.querySelectorAll('.ac-item').forEach(el => {
+    el.addEventListener('mousedown', (e) => { e.preventDefault(); });
+    el.addEventListener('click', () => {
+      const r = DATA.find(d => String(d.id) === el.dataset.id);
+      if (r) {
+        searchInput.value = r.name_th;
+        searchClear.style.display = 'block';
+        ac.style.display = 'none';
+        searchInput.blur();
+        applyFilters();
+        openDrawer(r);
+        if (r.lat && r.lng) map.setView([r.lat, r.lng], 16, {animate:true});
+      }
+    });
+  });
+});
+
+searchClear.addEventListener('click', () => {
+  searchInput.value = '';
+  searchClear.style.display = 'none';
+  ac.style.display = 'none';
+  applyFilters();
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrap')) ac.style.display = 'none';
+});
+
+function toNullableNumber(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function normalizeDuplicateValue(value) {
+  return String(value || '').trim().toLocaleLowerCase('th-TH').replace(/\s+/g, '');
+}
+
+function setBuildingEditorMessage(message = '') {
+  const box = document.getElementById('building-editor-message');
+  if (!box) return;
+  box.textContent = message;
+  box.classList.toggle('show', Boolean(message));
+}
+
+function clearBuildingEditorInvalidState(form) {
+  setBuildingEditorMessage('');
+  form?.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+}
+
+function normalizeOtherFees(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.map(item => ({
+      label: String(item?.label || item?.name || '').trim(),
+      amount: toNullableNumber(item?.amount ?? item?.value ?? item?.fee),
+      note: String(item?.note || item?.remark || '').trim()
+    })).filter(item => item.label || item.amount !== null || item.note);
+  }
+  if (typeof value === 'object') {
+    return Object.entries(value).map(([label, amount]) => ({
+      label: String(label || '').trim(),
+      amount: toNullableNumber(amount),
+      note: ''
+    })).filter(item => item.label || item.amount !== null);
+  }
+  return [];
+}
+
+function addOtherFeeRow(fee = {}) {
+  const list = document.getElementById('other-fees-list');
+  if (!list) return;
+
+  const row = document.createElement('div');
+  row.className = 'other-fee-row';
+  row.innerHTML = `
+    <div class="building-field"><label>ชื่อรายการ</label><input name="other_fee_label" type="text" value="${attrEsc(fee.label || '')}" placeholder="เช่น ค่าบัตรผ่าน"></div>
+    <div class="building-field"><label>จำนวนเงิน</label><input name="other_fee_amount" type="number" step="0.01" min="0" value="${attrEsc(fee.amount ?? '')}"></div>
+    <div class="building-field"><label>หมายเหตุ</label><input name="other_fee_note" type="text" value="${attrEsc(fee.note || '')}" placeholder="เช่น รายปี / ต่อครั้ง"></div>
+    <button type="button" class="other-fee-remove">ลบ</button>
+  `;
+  list.appendChild(row);
+}
+
+function renderOtherFeeRows(fees = []) {
+  const list = document.getElementById('other-fees-list');
+  if (!list) return;
+  list.innerHTML = '';
+  normalizeOtherFees(fees).forEach(addOtherFeeRow);
+}
+
+function collectOtherFees() {
+  return [...document.querySelectorAll('#other-fees-list .other-fee-row')]
+    .map(row => ({
+      label: String(row.querySelector('[name="other_fee_label"]')?.value || '').trim(),
+      amount: toNullableNumber(row.querySelector('[name="other_fee_amount"]')?.value),
+      note: String(row.querySelector('[name="other_fee_note"]')?.value || '').trim()
+    }))
+    .filter(item => item.label || item.amount !== null || item.note);
+}
+
+function findDuplicateBuilding(payload, existingId) {
+  const nameTh = normalizeDuplicateValue(payload.name_th);
+  const nameEng = normalizeDuplicateValue(payload.name_eng);
+  const hasCoords = Number.isFinite(payload.lat) && Number.isFinite(payload.lng);
+  const lat = hasCoords ? payload.lat.toFixed(6) : '';
+  const lng = hasCoords ? payload.lng.toFixed(6) : '';
+
+  return DATA.find(item => {
+    if (String(item.id) === String(existingId || '')) return false;
+
+    const sameThaiName = nameTh && normalizeDuplicateValue(item.name_th) === nameTh;
+    const sameEnglishName = nameEng && normalizeDuplicateValue(item.name_eng) === nameEng;
+    const itemLat = Number(item.lat);
+    const itemLng = Number(item.lng);
+    const sameCoords = hasCoords && Number.isFinite(itemLat) && Number.isFinite(itemLng)
+      && itemLat.toFixed(6) === lat
+      && itemLng.toFixed(6) === lng;
+
+    return sameThaiName || sameEnglishName || sameCoords;
+  }) || null;
+}
+
+function openBuildingEditor(record = null) {
+  const modal = document.getElementById('building-editor-modal');
+  const form = document.getElementById('building-editor-form');
+  const deleteBtn = document.getElementById('building-editor-delete-btn');
+  if (!modal || !form) return;
+
+  form.reset();
+  clearBuildingEditorInvalidState(form);
+  form.elements['record_id'].value = record?.id ?? '';
+  form.elements['name_th'].value = record?.name_th ?? '';
+  form.elements['name_eng'].value = record?.name_eng ?? '';
+  form.elements['status'].value = record?.status ?? 'Check Permission';
+  form.elements['group'].value = record?.group ?? 'X';
+  form.elements['type'].value = record?.type ?? 'L2';
+  form.elements['install_type'].value = record?.install_type ?? 'Building';
+  form.elements['survey_type'].value = record?.survey_type ?? 'Need Survey';
+  form.elements['area'].value = record?.area ?? '';
+  form.elements['province'].value = record?.province ?? '';
+  form.elements['location'].value = record?.location ?? '';
+  form.elements['lat'].value = record?.lat ?? '';
+  form.elements['lng'].value = record?.lng ?? '';
+  form.elements['address'].value = record?.address ?? '';
+  form.elements['contact'].value = record?.contact ?? '';
+  form.elements['phone'].value = record?.phone ?? '';
+  form.elements['mobile'].value = record?.mobile ?? '';
+  form.elements['email'].value = record?.email ?? '';
+  form.elements['remark'].value = record?.remark ?? '';
+  form.elements['wm_point'].value = record?.wm_point ?? 'No';
+  form.elements['enclosure'].value = record?.enclosure ?? 'No';
+  form.elements['max_horizontal'].value = record?.max_horizontal ?? '';
+  form.elements['damage_deposit'].value = record?.damage_deposit ?? '';
+  form.elements['contract_deposit'].value = record?.contract_deposit ?? '';
+  form.elements['insurance_fee'].value = record?.insurance_fee ?? '';
+  form.elements['main_fee'].value = record?.main_fee ?? '';
+  form.elements['annual_fee'].value = record?.annual_fee ?? '';
+  form.elements['coordination_fee'].value = record?.coordination_fee ?? '';
+  form.elements['shaft_fee_per_floor'].value = record?.shaft_fee_per_floor ?? '';
+  form.elements['horizontal_fee'].value = record?.horizontal_fee ?? '';
+  renderOtherFeeRows(record?.other_fees || []);
+
+  document.getElementById('building-editor-title').textContent = record ? 'แก้ไขข้อมูลอาคาร' : 'เพิ่มอาคารใหม่';
+  if (deleteBtn) deleteBtn.hidden = !record;
+  modal.classList.add('open');
+}
+
+function closeBuildingEditor() {
+  document.getElementById('building-editor-modal')?.classList.remove('open');
+}
+
+function closeDetailDrawerAfterDelete() {
+  document.getElementById('detail-drawer')?.classList.remove('open');
+  document.getElementById('drawer-overlay')?.classList.remove('open');
+  selectedId = null;
+}
+
+async function deleteBuildingFromForm(form) {
+  const id = form?.elements['record_id']?.value;
+  if (!id) return;
+
+  const record = DATA.find(d => String(d.id) === String(id));
+  const buildingName = record?.name_th || record?.name_eng || `ID ${id}`;
+  const confirmed = confirm(`ต้องการลบข้อมูลอาคาร "${buildingName}" ใช่หรือไม่?`);
+  if (!confirmed) return;
+
+  try {
+    await window.FSDB.deleteDoc(id);
+    // ไม่ต้องแก้ DATA หรือเรียก applyFilters() เอง เพราะ onSnapshot listener
+    // จะรับรู้การเปลี่ยนแปลงจาก Firestore และอัปเดตหน้าจอให้อัตโนมัติ (ทุก client)
+    closeBuildingEditor();
+    closeDetailDrawerAfterDelete();
+  } catch (err) {
+    console.error('ลบข้อมูลไม่สำเร็จ:', err);
+    alert('ลบข้อมูลไม่สำเร็จ: ' + err.message);
+  }
+}
+
+async function saveBuildingFromForm(form) {
+  const formData = new FormData(form);
+  const existingId = formData.get('record_id');
+  clearBuildingEditorInvalidState(form);
+
+  // รายการใหม่: ใช้ Firestore auto-generated ID เพื่อกันชนกันเวลามีหลายคนเพิ่มข้อมูลพร้อมกัน
+  const recordId = existingId || window.FSDB.newId();
+
+  const payload = normalizeBuildingRecord({
+    id: recordId,
+    update_date: new Date().toISOString().slice(0, 10),
+    name_th: String(formData.get('name_th') || '').trim(),
+    name_eng: String(formData.get('name_eng') || '').trim(),
+    area: String(formData.get('area') || '').trim(),
+    type: String(formData.get('type') || '').trim(),
+    install_type: String(formData.get('install_type') || '').trim(),
+    location: String(formData.get('location') || '').trim(),
+    province: String(formData.get('province') || '').trim(),
+    lat: toNullableNumber(formData.get('lat')),
+    lng: toNullableNumber(formData.get('lng')),
+    address: String(formData.get('address') || '').trim() || null,
+    contact: String(formData.get('contact') || '').trim() || null,
+    phone: String(formData.get('phone') || '').trim() || null,
+    mobile: String(formData.get('mobile') || '').trim() || null,
+    email: String(formData.get('email') || '').trim() || null,
+    status: String(formData.get('status') || '').trim(),
+    duration: null,
+    group: String(formData.get('group') || '').trim(),
+    survey_type: String(formData.get('survey_type') || '').trim(),
+    max_horizontal: toNullableNumber(formData.get('max_horizontal')),
+    wm_point: String(formData.get('wm_point') || '').trim(),
+    enclosure: String(formData.get('enclosure') || '').trim(),
+    damage_deposit: toNullableNumber(formData.get('damage_deposit')),
+    contract_deposit: toNullableNumber(formData.get('contract_deposit')),
+    insurance_fee: toNullableNumber(formData.get('insurance_fee')),
+    main_fee: toNullableNumber(formData.get('main_fee')),
+    annual_fee: toNullableNumber(formData.get('annual_fee')),
+    coordination_fee: toNullableNumber(formData.get('coordination_fee')),
+    shaft_fee_per_floor: toNullableNumber(formData.get('shaft_fee_per_floor')),
+    horizontal_fee: toNullableNumber(formData.get('horizontal_fee')),
+    other_fees: collectOtherFees(),
+    remark: String(formData.get('remark') || '').trim() || null
+  });
+
+  if (!payload.name_th) {
+    form.elements['name_th']?.classList.add('is-invalid');
+    setBuildingEditorMessage('กรุณากรอกชื่ออาคาร (ภาษาไทย)');
+    form.elements['name_th']?.focus();
+    return;
+  }
+
+  const duplicate = findDuplicateBuilding(payload, existingId);
+  if (duplicate) {
+    const duplicateName = duplicate.name_th || duplicate.name_eng || `ID ${duplicate.id}`;
+    const duplicateMessage = `พบข้อมูลอาคารซ้ำในระบบ: ${duplicateName} กรุณาตรวจสอบชื่ออาคารหรือพิกัดก่อนบันทึก`;
+    form.elements['name_th']?.classList.add('is-invalid');
+    if (payload.name_eng) form.elements['name_eng']?.classList.add('is-invalid');
+    if (Number.isFinite(payload.lat) && Number.isFinite(payload.lng)) {
+      form.elements['lat']?.classList.add('is-invalid');
+      form.elements['lng']?.classList.add('is-invalid');
+    }
+    setBuildingEditorMessage(duplicateMessage);
+    form.elements['name_th']?.focus();
+    return;
+  }
+
+  try {
+    await window.FSDB.setDoc(recordId, stripInternalFields(payload));
+    // ข้อมูลใน DATA จะถูกอัปเดตอัตโนมัติผ่าน onSnapshot listener
+    closeBuildingEditor();
+    openDrawerById(recordId);
+  } catch (err) {
+    console.error('บันทึกข้อมูลไม่สำเร็จ:', err);
+    setBuildingEditorMessage('บันทึกข้อมูลไม่สำเร็จ: ' + err.message);
+  }
+}
+
+
+// ====== INIT ======
+// เรนเดอร์ครั้งแรกด้วย DATA ว่าง ระหว่างรอ Firestore ซิงค์ข้อมูลเข้ามา (ดู initFirestoreData() ด้านบน)
+render(DATA);
+
+// ====== QUOTATION FEATURE ======
+const lazyScripts = {};
+
+function loadScriptOnce(src, globalName) {
+  if (window[globalName]) return Promise.resolve();
+  if (!lazyScripts[src]) {
+    lazyScripts[src] = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  }
+  return lazyScripts[src];
+}
+
+function loadPdfLibrary() {
+  return loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js', 'html2pdf');
+}
+
+function loadImageLibrary() {
+  return loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'html2canvas');
+}
+
+// Quotation modal functions
+function openQuotationModal() {
+  window._quotationCalculated = false;
+  _updateQuotationDynamicInputs();
+  document.getElementById('quotation-modal').classList.add('open');
+  initializeQuotationDate();
+  // Refresh dynamic inputs based on currentBuildingData
+  _updateQuotationDynamicInputs();
+}
+
+function _updateQuotationDynamicInputs() {
+  const building = window.currentBuildingData || {};
+  const buildingName = building.name_th || building.name_eng || '';
+
+  // Building info banner
+  const infoBox = document.getElementById('quotation-building-info');
+  const infoName = document.getElementById('quotation-building-name');
+  if (buildingName) {
+    infoName.textContent = buildingName;
+    infoBox.style.display = 'block';
+  } else {
+    infoBox.style.display = 'none';
+  }
+
+  // Parse wm_point field
+  const wmRaw = String(building.wm_point || '').trim();
+  const hasWM = wmRaw && wmRaw.toLowerCase() !== 'no' && wmRaw !== '' && wmRaw !== 'null';
+
+  const wmSelectGroup = document.getElementById('quotation-wm-group');
+  const wmManualGroup = document.getElementById('quotation-wm-manual-group');
+  const wmSelect = document.getElementById('quotation-wm-select');
+
+  if (hasWM) {
+    // Parse comma-separated WM floors e.g. "15, 25"
+    const wmFloors = wmRaw.split(/[,،、]/).map(s => s.trim()).filter(s => /^\d+$/.test(s));
+    wmSelect.innerHTML = wmFloors.map(f => `<option value="${f}">ชั้น ${f}</option>`).join('');
+    wmSelectGroup.style.display = 'block';
+    wmManualGroup.style.display = 'none';
+  } else {
+    wmSelectGroup.style.display = 'none';
+    wmManualGroup.style.display = 'block';
+    document.getElementById('quotation-wm-manual').value = '';
+  }
+
+  // Horizontal fee hint
+  const hwireRate = Number(building.horizontal_fee) || 0;
+  const hwireRateEl = document.getElementById('quotation-hwire-rate');
+  if (hwireRate > 0) {
+    hwireRateEl.textContent = `อาคารนี้มีค่าวางสาย Horizontal ${formatCurrencyNumeric(hwireRate)} บาท/เมตร`;
+    hwireRateEl.style.color = 'var(--yellow)';
+  } else {
+    hwireRateEl.textContent = '';
+  }
+
+  // Reset summary/shaft info
+  document.getElementById('quotation-distance-summary').style.display = 'none';
+  document.getElementById('quotation-shaft-info').style.display = 'none';
+}
+
+function closeQuotationModal() {
+  document.getElementById('quotation-modal').classList.remove('open');
+}
+
+function quickCalculateQuotation(buildingId) {
+  // หาข้อมูลอาคาร
+  const building = DATA.find(d => String(d.id) === String(buildingId));
+  
+  // Set customer name only — ระยะสายจะคำนวณจากชั้น WM + ชั้นลูกค้า
+  // ไม่ auto-fill ชื่อลูกค้า ให้ผู้ใช้กรอกเอง
+  
+  // Store building data for calculation and clear previous quotation inputs
+  resetQuotationForm({ buildingData: building || {} });
+  
+  // Open modal (will call _updateQuotationDynamicInputs)
+  openQuotationModal();
+}
+
+function initializeQuotationDate() {
+  const today = new Date();
+  const dateStr = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear() + 543}`;
+  document.getElementById('prev-date').textContent = dateStr;
+}
+
+// Format currency
+function formatCurrency(value) {
+  return new Intl.NumberFormat('th-TH', {
+    style: 'currency',
+    currency: 'THB',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(value);
+}
+
+function formatCurrencyNumeric(value) {
+  return value.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+function getQuotationExportMessage() {
+  return document.getElementById('quotation-export-message') || document.getElementById('quotation-message');
+}
+
+function resetQuotationExportMessage() {
+  const exportMsgEl = document.getElementById('quotation-export-message');
+  if (exportMsgEl) exportMsgEl.style.display = 'none';
+}
+
+// Calculate quotation
+function calculateQuotation() {
+  const customerName = document.getElementById('quotation-customer').value.trim();
+  const custFloor = parseInt(document.getElementById('quotation-cust-floor').value);
+  const hwireInput = parseFloat(document.getElementById('quotation-hwire').value) || 0;
+  const msgEl = document.getElementById('quotation-message');
+  resetQuotationExportMessage();
+
+  // Validate customer name
+  if (!customerName) {
+    msgEl.className = 'error';
+    msgEl.innerHTML = iconText('x', 'กรุณากรอกชื่อลูกค้า');
+    msgEl.style.display = 'block';
+    return;
+  }
+
+  // Get WM floor
+  const building = window.currentBuildingData || {};
+  const wmRaw = String(building.wm_point || '').trim();
+  const hasWM = wmRaw && wmRaw.toLowerCase() !== 'no' && wmRaw !== '' && wmRaw !== 'null';
+  let wmFloor;
+  if (hasWM) {
+    wmFloor = parseInt(document.getElementById('quotation-wm-select').value);
+  } else {
+    wmFloor = parseInt(document.getElementById('quotation-wm-manual').value);
+  }
+
+  if (isNaN(wmFloor) || wmFloor < 0) {
+    msgEl.className = 'error';
+    msgEl.innerHTML = iconText('x', 'กรุณากรอกหรือเลือกชั้น WM');
+    msgEl.style.display = 'block';
+    return;
+  }
+
+  if (isNaN(custFloor) || custFloor < 0) {
+    msgEl.className = 'error';
+    msgEl.innerHTML = iconText('x', 'กรุณากรอกชั้นที่ลูกค้าอยู่');
+    msgEl.style.display = 'block';
+    return;
+  }
+
+  if (hwireInput < 0) {
+    msgEl.className = 'error';
+    msgEl.innerHTML = iconText('x', 'ระยะ Horizontal ต้องไม่ติดลบ');
+    msgEl.style.display = 'block';
+    return;
+  }
+
+  // ===== DISTANCE CALCULATION =====
+  const METERS_PER_FLOOR = 5;
+  const floorDiff = Math.abs(custFloor - wmFloor);
+  const verticalDistance = floorDiff * METERS_PER_FLOOR;
+  const totalCableDistance = verticalDistance + hwireInput;
+
+  // Show distance summary
+  const summaryBox = document.getElementById('quotation-distance-summary');
+  document.getElementById('quotation-dist-vertical').innerHTML =
+    `${svgIcon('vertical')} แนวตั้ง: |${custFloor} - ${wmFloor}| × 5 ม. = ${floorDiff} ชั้น × 5 ม. = ${verticalDistance} ม.`;
+  document.getElementById('quotation-dist-horizontal').innerHTML =
+    `${svgIcon('horizontal')} แนวนอน: ${hwireInput} ม.`;
+  document.getElementById('quotation-dist-total').innerHTML =
+    `${svgIcon('ruler')} ระยะสายรวม: ${verticalDistance} + ${hwireInput} = ${totalCableDistance} ม.`;
+  summaryBox.style.display = 'block';
+
+  // ===== COST CALCULATION =====
+  const CABLE_RATE = 158.36;
+  const EQUIPMENT_COST = 2200;
+  const CLOSURE_COST = 200;
+  const SPLICE_COST = 400;
+
+  const cableCost = totalCableDistance * CABLE_RATE;
+
+  // Building fees
+  const shaftRatePerFloor = Number(building.shaft_fee_per_floor) || 0;
+  const horizontalRatePerMeter = Number(building.horizontal_fee) || 0;
+
+  // shaft uses floor diff (computed automatically)
+  const shaftTotal = shaftRatePerFloor > 0 ? shaftRatePerFloor * floorDiff : 0;
+  const horizontalTotal = horizontalRatePerMeter > 0 ? horizontalRatePerMeter * totalCableDistance : 0;
+
+  // Show shaft info if applicable
+  const shaftInfoEl = document.getElementById('quotation-shaft-info');
+  const shaftSummaryEl = document.getElementById('quotation-shaft-summary');
+  if (shaftRatePerFloor > 0 && floorDiff > 0) {
+    shaftSummaryEl.innerHTML =
+      `${svgIcon('alert')} ค่า Shaft: ${formatCurrencyNumeric(shaftRatePerFloor)} บ./ชั้น × ${floorDiff} ชั้น = ${formatCurrencyNumeric(shaftTotal)} บาท`;
+    shaftInfoEl.style.display = 'block';
+  } else {
+    shaftInfoEl.style.display = 'none';
+  }
+
+  // หมายเหตุ: เงินประกันความเสียหาย (damage_deposit) เป็นเงินประกัน จึงไม่นำมาคิดในใบประเมินราคา
+  // ส่วนค่ากรมธรรม์ (insurance_fee) เป็นค่าใช้จ่ายจริง จึงนำมาคิด
+  const buildingFees = [
+    { label: 'ค่ามัดจำสัญญา (Contract Deposit)', value: Number(building.contract_deposit) || 0, qty: '1 ครั้ง' },
+    { label: 'ค่ากรมธรรม์ (Insurance)',           value: Number(building.insurance_fee) || 0,   qty: '1 ครั้ง' },
+    { label: 'ค่าหลัก (Main Fee)',                value: Number(building.main_fee) || 0,        qty: '1 ครั้ง' },
+    { label: 'ค่าประสานงาน (Coordination)',       value: Number(building.coordination_fee) || 0, qty: '1 ครั้ง' },
+    { label: `ค่า Shaft (${formatCurrencyNumeric(shaftRatePerFloor)} บ./ชั้น × ${floorDiff} ชั้น)`,
+      value: shaftTotal, qty: `${floorDiff} ชั้น`, hidden: shaftRatePerFloor === 0 || floorDiff === 0 },
+    { label: `ค่าวางสาย Horizontal ตามระยะสายรวม (${formatCurrencyNumeric(horizontalRatePerMeter)} บ./ม. × ${totalCableDistance} ม.)`,
+      value: horizontalTotal, qty: `${totalCableDistance} ม.`, hidden: horizontalRatePerMeter === 0 },
+  ].filter(f => !f.hidden && f.value > 0);
+
+  const buildingFeesTotal = buildingFees.reduce((a, f) => a + f.value, 0);
+  const totalCost = cableCost + EQUIPMENT_COST + CLOSURE_COST + SPLICE_COST + buildingFeesTotal;
+
+  // ===== UPDATE FORM DISPLAY =====
+  document.getElementById('quotation-cable-cost').textContent = formatCurrency(cableCost);
+  document.getElementById('quotation-equipment-cost').textContent = formatCurrency(EQUIPMENT_COST);
+  document.getElementById('quotation-closure-cost').textContent = formatCurrency(CLOSURE_COST);
+  document.getElementById('quotation-splice-cost').textContent = formatCurrency(SPLICE_COST);
+
+  const buildingFeesContainer = document.getElementById('quotation-building-fees');
+  if (buildingFeesTotal > 0) {
+    buildingFeesContainer.innerHTML = `
+      <div class="quotation-calc-row" style="font-weight:700; margin:10px 0 8px; padding:8px 0; border-top:1px solid var(--border);">
+        <span class="quotation-calc-label">ค่าธรรมเนียมอาคาร</span>
+        <span class="quotation-calc-value">${formatCurrency(buildingFeesTotal)}</span>
+      </div>
+      ${buildingFees.map(f => `
+        <div class="quotation-calc-row">
+          <span class="quotation-calc-label">${esc(f.label)}</span>
+          <span class="quotation-calc-value">${formatCurrency(f.value)}</span>
+        </div>`).join('')}`;
+  } else {
+    buildingFeesContainer.innerHTML = '';
+  }
+
+  document.getElementById('quotation-total-cost').textContent = formatCurrency(totalCost);
+
+  // ===== UPDATE PREVIEW =====
+  document.getElementById('prev-customer-name').textContent = customerName;
+  document.getElementById('prev-distance').textContent = `${totalCableDistance} ม. (แนวตั้ง ${verticalDistance} + แนวนอน ${hwireInput})`;
+  document.getElementById('prev-cable-cost').textContent = formatCurrencyNumeric(cableCost) + ' บาท';
+
+  const prevBuildingFeesContainer = document.getElementById('prev-building-fees-table');
+  if (buildingFeesTotal > 0) {
+    prevBuildingFeesContainer.innerHTML = buildingFees.map(f => `
+      <tr>
+        <td>${esc(f.label)}</td>
+        <td>${esc(f.qty)}</td>
+        <td class="quotation-amount">${formatCurrencyNumeric(f.value)} บาท</td>
+      </tr>`).join('');
+  } else {
+    prevBuildingFeesContainer.innerHTML = '';
+  }
+
+  document.getElementById('prev-total').textContent = formatCurrencyNumeric(totalCost) + ' บาท';
+
+  window._quotationCalculated = true;
+  window._quotationLastCustomer = customerName;
+  msgEl.className = 'success';
+  msgEl.innerHTML = iconText('check', 'คำนวณสำเร็จ');
+  msgEl.style.display = 'block';
+  setTimeout(() => msgEl.style.display = 'none', 3000);
+}
+
+// Generate PDF
+async function generateQuotationPDF() {
+  const customerName = document.getElementById('quotation-customer').value.trim();
+  const msgEl = getQuotationExportMessage();
+
+  if (!window._quotationCalculated || !customerName) {
+    msgEl.className = 'error';
+    msgEl.innerHTML = iconText('x', 'กรุณากรอกข้อมูลและกดคำนวณก่อน');
+    msgEl.style.display = 'block';
+    return;
+  }
+
+  if (typeof html2pdf === 'undefined') {
+    msgEl.className = 'error';
+    msgEl.textContent = 'กำลังโหลดไลบรารี่ PDF...';
+    msgEl.style.display = 'block';
+    try {
+      await loadPdfLibrary();
+    } catch (err) {
+      msgEl.className = 'error';
+      msgEl.innerHTML = iconText('x', 'โหลดไลบรารี่ PDF ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต');
+      msgEl.style.display = 'block';
+      return;
+    }
+  }
+  
+  const element = document.getElementById('quotation-preview');
+  const options = {
+    margin: 10,
+    filename: `quotation_${customerName}_${new Date().getTime()}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2 },
+    jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
+  };
+  
+  html2pdf().set(options).from(element).save();
+  
+  msgEl.className = 'success';
+  msgEl.innerHTML = iconText('check', 'PDF ดาวน์โหลดสำเร็จ');
+  msgEl.style.display = 'block';
+  setTimeout(() => msgEl.style.display = 'none', 3000);
+}
+
+// Generate Image
+async function generateQuotationImage() {
+  const customerName = document.getElementById('quotation-customer').value.trim();
+  const msgEl = getQuotationExportMessage();
+
+  if (!window._quotationCalculated || !customerName) {
+    msgEl.className = 'error';
+    msgEl.innerHTML = iconText('x', 'กรุณากรอกข้อมูลและกดคำนวณก่อน');
+    msgEl.style.display = 'block';
+    return;
+  }
+
+  
+  if (typeof html2canvas === 'undefined') {
+    msgEl.className = 'error';
+    msgEl.textContent = 'กำลังโหลดไลบรารี่รูปภาพ...';
+    msgEl.style.display = 'block';
+    try {
+      await loadImageLibrary();
+    } catch (err) {
+      msgEl.className = 'error';
+      msgEl.innerHTML = iconText('x', 'โหลดไลบรารี่รูปภาพไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต');
+      msgEl.style.display = 'block';
+      return;
+    }
+  }
+  
+  const element = document.getElementById('quotation-preview');
+  
+  html2canvas(element, {
+    scale: 2,
+    backgroundColor: '#ffffff',
+    logging: false
+  }).then(canvas => {
+    const link = document.createElement('a');
+    link.href = canvas.toDataURL('image/png');
+    link.download = `quotation_${customerName}_${new Date().getTime()}.png`;
+    link.click();
+    
+    msgEl.className = 'success';
+    msgEl.innerHTML = iconText('check', 'รูปภาพดาวน์โหลดสำเร็จ');
+    msgEl.style.display = 'block';
+    setTimeout(() => msgEl.style.display = 'none', 3000);
+  }).catch(err => {
+    console.error('Error:', err);
+    msgEl.className = 'error';
+    msgEl.innerHTML = iconText('x', 'เกิดข้อผิดพลาดในการสร้างรูปภาพ');
+    msgEl.style.display = 'block';
+  });
+}
+
+// Reset form
+function resetQuotationForm(options = {}) {
+  const buildingData = Object.prototype.hasOwnProperty.call(options, 'buildingData')
+    ? options.buildingData
+    : (window.currentBuildingData || {});
+
+  document.getElementById('quotation-customer').value = '';
+  document.getElementById('quotation-cust-floor').value = '';
+  document.getElementById('quotation-hwire').value = '';
+  document.getElementById('quotation-wm-manual').value = '';
+  const wmSelect = document.getElementById('quotation-wm-select');
+  if (wmSelect) wmSelect.selectedIndex = 0;
+  document.getElementById('quotation-cable-cost').textContent = '0 บาท';
+  document.getElementById('quotation-equipment-cost').textContent = '2,200 บาท';
+  document.getElementById('quotation-closure-cost').textContent = '200 บาท';
+  document.getElementById('quotation-splice-cost').textContent = '400 บาท';
+  document.getElementById('quotation-building-fees').innerHTML = '';
+  document.getElementById('quotation-total-cost').textContent = '2,800 บาท';
+  document.getElementById('quotation-message').style.display = 'none';
+  resetQuotationExportMessage();
+  document.getElementById('quotation-distance-summary').style.display = 'none';
+  document.getElementById('quotation-shaft-info').style.display = 'none';
+  document.getElementById('prev-customer-name').textContent = '-';
+  document.getElementById('prev-distance').textContent = '-';
+  document.getElementById('prev-cable-cost').textContent = '-';
+  document.getElementById('prev-building-fees-table').innerHTML = '';
+  document.getElementById('prev-total').textContent = '-';
+  window._quotationCalculated = false;
+  window.currentBuildingData = buildingData || {};
+  _updateQuotationDynamicInputs();
+}
+
+// Quotation button event listener
+document.addEventListener('DOMContentLoaded', function() {
+  const addBuildingBtn = document.getElementById('add-building-btn');
+  const quotationModal = document.getElementById('quotation-modal');
+  const buildingEditorModal = document.getElementById('building-editor-modal');
+  const buildingEditorForm = document.getElementById('building-editor-form');
+  const buildingEditorCloseBtn = document.getElementById('building-editor-close-btn');
+  const buildingEditorCancelBtn = document.getElementById('building-editor-cancel-btn');
+  const buildingEditorDeleteBtn = document.getElementById('building-editor-delete-btn');
+  const otherFeeAddBtn = document.getElementById('other-fee-add-btn');
+  
+  if (addBuildingBtn) {
+    addBuildingBtn.addEventListener('click', function() {
+      openBuildingEditor(null);
+    });
+  }
+
+  if (buildingEditorModal) {
+    buildingEditorModal.addEventListener('click', function(e) {
+      if (e.target === buildingEditorModal) closeBuildingEditor();
+    });
+  }
+
+  if (buildingEditorCloseBtn) {
+    buildingEditorCloseBtn.addEventListener('click', closeBuildingEditor);
+  }
+  if (buildingEditorCancelBtn) {
+    buildingEditorCancelBtn.addEventListener('click', closeBuildingEditor);
+  }
+  if (buildingEditorDeleteBtn && buildingEditorForm) {
+    buildingEditorDeleteBtn.addEventListener('click', function() {
+      deleteBuildingFromForm(buildingEditorForm);
+    });
+  }
+  if (otherFeeAddBtn) {
+    otherFeeAddBtn.addEventListener('click', function() {
+      addOtherFeeRow();
+    });
+  }
+
+  if (buildingEditorForm) {
+    buildingEditorForm.addEventListener('click', function(e) {
+      const removeBtn = e.target.closest('.other-fee-remove');
+      if (!removeBtn) return;
+      removeBtn.closest('.other-fee-row')?.remove();
+      clearBuildingEditorInvalidState(buildingEditorForm);
+    });
+    buildingEditorForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      saveBuildingFromForm(buildingEditorForm);
+    });
+    buildingEditorForm.addEventListener('input', function() {
+      clearBuildingEditorInvalidState(buildingEditorForm);
+    });
+    buildingEditorForm.addEventListener('change', function() {
+      clearBuildingEditorInvalidState(buildingEditorForm);
+    });
+  }
+
+  if (quotationModal) {
+    quotationModal.addEventListener('click', function(e) {
+      if (e.target === quotationModal) closeQuotationModal();
+    });
+  }
+
+  document.getElementById('quotation-calculate-btn')?.addEventListener('click', calculateQuotation);
+  document.getElementById('quotation-reset-btn')?.addEventListener('click', () => resetQuotationForm());
+  document.getElementById('quotation-close-btn')?.addEventListener('click', closeQuotationModal);
+  document.getElementById('quotation-pdf-btn')?.addEventListener('click', generateQuotationPDF);
+  document.getElementById('quotation-image-btn')?.addEventListener('click', generateQuotationImage);
+  
+  // Enter key navigation: customer → cust-floor → hwire → calculate
+  const nav = (fromId, toId) => {
+    const el = document.getElementById(fromId);
+    if (!el) return;
+    el.addEventListener('keypress', e => {
+      if (e.key !== 'Enter') return;
+      if (toId) document.getElementById(toId)?.focus();
+      else calculateQuotation();
+    });
+  };
+  nav('quotation-customer', 'quotation-cust-floor');
+  nav('quotation-wm-manual', 'quotation-cust-floor');
+  nav('quotation-cust-floor', 'quotation-hwire');
+  nav('quotation-hwire', null);
+});
+</script>
+  <script>
+    // ===== CLEAN UX: MODAL + SIDEBAR =====
+(function(){
+  const sidebar  = document.getElementById('sidebar');
+  const sideBtn  = document.getElementById('building-toggle');
+  const modal    = document.getElementById('detail-drawer');
+  const overlay  = document.getElementById('drawer-overlay');
+  const closeBtn = document.getElementById('drawer-close');
+
+  // --- MODAL open/close ---
+  function openModal(){
+    overlay.classList.add('open');
+    requestAnimationFrame(()=>{
+      modal.classList.add('open');
+    });
+    document.addEventListener('keydown', onEsc);
+  }
+  function closeModal(){
+    modal.classList.remove('open');
+    overlay.classList.remove('open');
+    selectedId = null;
+    document.querySelectorAll('.list-item').forEach(el=>el.classList.remove('selected'));
+    allMarkers.forEach(({marker,data:d})=>marker.setIcon(makeIcon(statusColor(d.status),false)));
+    document.removeEventListener('keydown', onEsc);
+  }
+  function onEsc(e){ if(e.key==='Escape') closeModal(); }
+
+  // Wrap openDrawer to also show modal
+  const _origOpen = window.openDrawer;
+  window.openDrawer = function(r){
+    _origOpen(r);
+    openModal();
+  };
+
+  closeBtn.addEventListener('click', closeModal);
+  overlay.addEventListener('click', closeModal);
+
+  // --- SIDEBAR toggle ---
+  sideBtn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const isOpen = sidebar.classList.toggle('show');
+    sideBtn.classList.toggle('active', isOpen);
+  });
+
+  // Click outside sidebar to close
+  document.addEventListener('click', (e)=>{
+    if(sidebar.classList.contains('show') &&
+       !sidebar.contains(e.target) &&
+       e.target !== sideBtn){
+      sidebar.classList.remove('show');
+      sideBtn.classList.remove('active');
+    }
+  });
+})();
+  </script>
+
+<!-- ========== QUOTATION MODAL ========== -->
+<div id="quotation-modal">
+  <div id="quotation-container">
+    <!-- FORM PANEL -->
+    <div id="quotation-form-panel">
+      <h2><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l2 2v3H7V5l2-2Z"/><path d="M7 8h10v13H7z"/><path d="M9 13h6"/><path d="M9 17h6"/></svg> สร้างใบประเมินราคาเบื้องต้น</h2>
+      
+      <div id="quotation-message"></div>
+      
+      <div id="quotation-building-info" style="display:none; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:12px;">
+        <div style="font-weight:700; color:var(--accent); margin-bottom:4px; display:flex; align-items:center; gap:6px;"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M16 8h2a2 2 0 0 1 2 2v11"/><path d="M8 7h4"/><path d="M8 11h4"/><path d="M8 15h4"/><path d="M3 21h18"/></svg> อาคารที่เลือก</div>
+        <div id="quotation-building-name" style="color:var(--text); font-weight:600;"></div>
+      </div>
+
+      <div class="quotation-form-group">
+        <label for="quotation-customer">ชื่อลูกค้า *</label>
+        <input type="text" id="quotation-customer" placeholder="กรอกชื่อลูกค้า">
+      </div>
+
+      <!-- WM Point selector (มี WM ในอาคาร) -->
+      <div id="quotation-wm-group" class="quotation-form-group" style="display:none;">
+        <label for="quotation-wm-select">ชั้น WM (จุดเชื่อมต่อ) *</label>
+        <select id="quotation-wm-select" style="width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); border-radius:8px; padding:10px 12px; font-size:14px; font-family:inherit; outline:none;"></select>
+        <small style="color:var(--muted);font-size:11px;margin-top:3px;display:block;">ข้อมูลจาก WM Point ในระบบ</small>
+      </div>
+
+      <!-- Manual WM input (ไม่มี WM / No) -->
+      <div id="quotation-wm-manual-group" class="quotation-form-group" style="display:none;">
+        <label for="quotation-wm-manual">ชั้น WM (กรอกเอง) *</label>
+        <input type="number" id="quotation-wm-manual" placeholder="ชั้นที่มีอุปกรณ์เชื่อมต่อ" min="0" step="1">
+        <small style="color:var(--yellow);font-size:11px;margin-top:3px;display:flex;align-items:center;gap:5px;"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17h.01"/></svg> อาคารนี้ไม่มีข้อมูล WM ในระบบ</small>
+      </div>
+
+      <div class="quotation-form-group">
+        <label for="quotation-cust-floor">ชั้นที่ลูกค้าอยู่ *</label>
+        <input type="number" id="quotation-cust-floor" placeholder="เช่น 20" min="0" step="1">
+      </div>
+
+      <div class="quotation-form-group">
+        <label for="quotation-hwire">ระยะสายแนวนอน Horizontal (เมตร) *</label>
+        <input type="number" id="quotation-hwire" placeholder="เช่น 30" min="0" step="0.1" value="">
+        <small id="quotation-hwire-rate" style="color:var(--muted);font-size:11px;margin-top:3px;display:block;"></small>
+      </div>
+
+      <!-- Summary box: แสดงการคำนวณระยะสาย -->
+      <div id="quotation-distance-summary" style="display:none; background:var(--surface3); border:1px solid var(--border2); border-radius:8px; padding:10px 14px; margin-bottom:4px; font-size:12px; line-height:1.8;">
+        <div style="font-weight:700; color:var(--accent); margin-bottom:4px; display:flex; align-items:center; gap:6px;"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17 17 4l3 3L7 20l-3-3Z"/><path d="m14 7 3 3"/><path d="m11 10 2 2"/><path d="m8 13 3 3"/></svg> สรุประยะสาย</div>
+        <div id="quotation-dist-vertical" style="color:var(--text2);"></div>
+        <div id="quotation-dist-horizontal" style="color:var(--text2);"></div>
+        <div id="quotation-dist-total" style="font-weight:700; color:var(--text); border-top:1px solid var(--border); margin-top:6px; padding-top:6px;"></div>
+      </div>
+
+      <!-- Shaft fee group (ถ้าอาคารมี shaft_fee_per_floor) -->
+      <div id="quotation-shaft-info" style="display:none; background:var(--yellow-bg); border:1px solid rgba(245,158,11,.3); border-radius:8px; padding:8px 14px; margin-bottom:8px; font-size:12px;">
+        <span id="quotation-shaft-summary" style="color:var(--yellow);"></span>
+      </div>
+      
+      <div class="quotation-calc-display">
+        <div class="quotation-calc-row">
+          <span class="quotation-calc-label">ค่าติดตั้งสาย (OFC 2 Core)</span>
+          <span class="quotation-calc-value" id="quotation-cable-cost">0 บาท</span>
+        </div>
+        
+        <div class="quotation-calc-row">
+          <span class="quotation-calc-label">ค่าติดตั้งอุปกรณ์</span>
+          <span class="quotation-calc-value" id="quotation-equipment-cost">2,200 บาท</span>
+        </div>
+        
+        <div class="quotation-calc-row">
+          <span class="quotation-calc-label">Closure</span>
+          <span class="quotation-calc-value" id="quotation-closure-cost">200 บาท</span>
+        </div>
+        
+        <div class="quotation-calc-row">
+          <span class="quotation-calc-label">ค่า Splice (2 จุด)</span>
+          <span class="quotation-calc-value" id="quotation-splice-cost">400 บาท</span>
+        </div>
+        
+        <div id="quotation-building-fees"></div>
+        
+        <div class="quotation-total-row">
+          <span class="quotation-total-label">รวมทั้งสิ้น</span>
+          <span class="quotation-total-value" id="quotation-total-cost">2,800 บาท</span>
+        </div>
+      </div>
+      
+      <div class="quotation-buttons">
+        <button class="quotation-btn quotation-btn-primary" id="quotation-calculate-btn" type="button"><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 11h.01"/><path d="M12 11h.01"/><path d="M16 11h.01"/><path d="M8 15h.01"/><path d="M12 15h.01"/><path d="M16 15h.01"/></svg>คำนวณ</span></button>
+        <button class="quotation-btn quotation-btn-warning" id="quotation-reset-btn" type="button"><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v6h6"/></svg>รีเซ็ต</span></button>
+      </div>
+      
+      <button class="quotation-close-btn" id="quotation-close-btn" type="button" style="width: 100%; margin-top: 15px;">ปิด</button>
+    </div>
+    
+    <!-- PREVIEW PANEL -->
+    <div id="quotation-preview-panel">
+      <h2><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="3"/></svg> ตัวอย่างใบประเมินราคาเบื้องต้น</h2>
+      
+      <div id="quotation-preview">
+        <div class="quotation-preview-header">
+          <div class="quotation-preview-title">ใบประเมินราคาเบื้องต้น</div>
+          <div class="quotation-preview-subtitle">PRELIMINARY COST ESTIMATE</div>
+        </div>
+        
+        <div class="quotation-preview-info">
+          <div class="quotation-preview-block">
+            <h3>ชื่อลูกค้า</h3>
+            <p id="prev-customer-name">-</p>
+          </div>
+          <div class="quotation-preview-block">
+            <h3>วันที่</h3>
+            <p id="prev-date">-</p>
+          </div>
+        </div>
+        
+        <table class="quotation-preview-table">
+          <thead>
+            <tr>
+              <th style="width: 50%;">รายการ</th>
+              <th style="width: 25%;">ปริมาณ</th>
+              <th style="width: 25%; text-align: right;">ราคารวม</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>ค่าติดตั้งสาย (OFC 2 Core)</td>
+              <td id="prev-distance">-</td>
+              <td class="quotation-amount" id="prev-cable-cost">-</td>
+            </tr>
+            <tr>
+              <td>ค่าติดตั้งอุปกรณ์</td>
+              <td>1 ชุด</td>
+              <td class="quotation-amount">2,200.00 บาท</td>
+            </tr>
+            <tr>
+              <td>Closure</td>
+              <td>1 ชิ้น</td>
+              <td class="quotation-amount">200.00 บาท</td>
+            </tr>
+            <tr>
+              <td>ค่า Splice</td>
+              <td>2 จุด</td>
+              <td class="quotation-amount">400.00 บาท</td>
+            </tr>
+          </tbody>
+          <tbody id="prev-building-fees-table"></tbody>
+        </table>
+        
+        <div class="quotation-preview-summary">
+          <div class="quotation-summary-total">
+            <span>รวมทั้งสิ้น</span>
+            <span id="prev-total">-</span>
+          </div>
+        </div>
+        
+        <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd; text-align: center; color: #999; font-size: 10px;">
+          <p>ใบประเมินราคาเบื้องต้นนี้มีผลใช้บังคับ 7 วัน นับจากวันที่ลงวันที่</p>
+        </div>
+      </div>
+      
+      <div class="quotation-export-buttons">
+        <button class="quotation-btn quotation-btn-secondary" id="quotation-pdf-btn" type="button"><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>PDF</span></button>
+        <button class="quotation-btn quotation-btn-warning" id="quotation-image-btn" type="button"><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="10" r="1.5"/><path d="m21 15-5-5L5 19"/></svg>Image</span></button>
+      </div>
+      <div id="quotation-export-message"></div>
+    </div>
+  </div>
+</div>
+
+<div id="building-editor-modal">
+  <div id="building-editor-container">
+    <div class="building-editor-header">
+      <div>
+        <span class="building-editor-kicker">Building Form</span>
+        <h3 id="building-editor-title">เพิ่มอาคารใหม่</h3>
+        <p class="building-editor-subtitle">กรอกข้อมูลอาคารและตรวจสอบรายการซ้ำก่อนบันทึก</p>
+      </div>
+      <button id="building-editor-close-btn" class="building-editor-close" type="button">ปิด</button>
+    </div>
+    <form id="building-editor-form">
+      <input type="hidden" name="record_id">
+      <div id="building-editor-message" class="building-editor-message" role="alert"></div>
+      <div class="building-editor-grid">
+        <div class="building-field"><label>ชื่ออาคาร (ไทย) *</label><input name="name_th" type="text" required autocomplete="off"></div>
+        <div class="building-field"><label>ชื่ออาคาร (อังกฤษ)</label><input name="name_eng" type="text" autocomplete="off"></div>
+        <div class="building-field"><label>Status</label><select name="status"><option>Permission Confirmed</option><option>MOU</option><option>Check Permission</option><option>อาคารปิดถาวร</option></select></div>
+        <div class="building-field"><label>Group</label><select name="group"><option>Priority 1</option><option>Priority 2</option><option>X</option></select></div>
+        <div class="building-field"><label>Type</label><select name="type"><option>L1</option><option>L2</option><option>L3</option></select></div>
+        <div class="building-field"><label>Install Type</label><select name="install_type"><option>Building</option><option>Shopping Mall</option><option>Nikom</option><option>Data center</option><option>Airport</option><option>Port</option><option>Market</option></select></div>
+        <div class="building-field"><label>Survey Type</label><select name="survey_type"><option>Auto</option><option>Need Survey</option><option>Need Mark</option><option>Wait Check</option></select></div>
+        <div class="building-field"><label>Area</label><input name="area" type="text"></div>
+        <div class="building-field"><label>Province</label><input name="province" type="text"></div>
+        <div class="building-field"><label>Location</label><input name="location" type="text"></div>
+        <div class="building-field"><label>Latitude</label><input name="lat" type="number" step="any"></div>
+        <div class="building-field"><label>Longitude</label><input name="lng" type="number" step="any"></div>
+        <div class="building-field"><label>WM Point</label><select name="wm_point"><option>No</option><option>Yes</option></select></div>
+        <div class="building-field"><label>Enclosure</label><select name="enclosure"><option>No</option><option>Yes</option></select></div>
+        <div class="building-field"><label>Max H-Wire (ม.)</label><input name="max_horizontal" type="number" step="0.01" min="0"></div>
+        <div class="building-editor-section">ค่าธรรมเนียม</div>
+        <div class="building-field"><label>ค่าเสียหาย (Damage Deposit)</label><input name="damage_deposit" type="number" step="0.01" min="0"></div>
+        <div class="building-field"><label>ค่ามัดจำสัญญา (Contract Deposit)</label><input name="contract_deposit" type="number" step="0.01" min="0"></div>
+        <div class="building-field"><label>ค่าประกัน (Insurance)</label><input name="insurance_fee" type="number" step="0.01" min="0"></div>
+        <div class="building-field"><label>ค่าหลัก (Main Fee)</label><input name="main_fee" type="number" step="0.01" min="0"></div>
+        <div class="building-field"><label>ค่าบริการรายปี (Annual Fee)</label><input name="annual_fee" type="number" step="0.01" min="0"></div>
+        <div class="building-field"><label>ค่าประสานงาน (Coordination)</label><input name="coordination_fee" type="number" step="0.01" min="0"></div>
+        <div class="building-field"><label>ค่า Shaft ต่อชั้น</label><input name="shaft_fee_per_floor" type="number" step="0.01" min="0"></div>
+        <div class="building-field"><label>ค่าวางสาย Horizontal /ม.</label><input name="horizontal_fee" type="number" step="0.01" min="0"></div>
+        <div class="other-fees-panel">
+          <div class="building-editor-section" style="margin-top:0;">ค่าใช้จ่ายเพิ่มเติม</div>
+          <div id="other-fees-list" class="other-fees-list"></div>
+          <button type="button" id="other-fee-add-btn" class="other-fee-add">+ เพิ่มค่าใช้จ่าย</button>
+        </div>
+        <div class="building-field full"><label>Address</label><input name="address" type="text"></div>
+        <div class="building-field"><label>Contact</label><input name="contact" type="text"></div>
+        <div class="building-field"><label>Phone</label><input name="phone" type="text"></div>
+        <div class="building-field"><label>Mobile</label><input name="mobile" type="text"></div>
+        <div class="building-field"><label>Email</label><input name="email" type="text"></div>
+        <div class="building-field full"><label>Remark</label><textarea name="remark" rows="4"></textarea></div>
+      </div>
+      <div class="building-editor-actions">
+        <button type="button" id="building-editor-delete-btn" class="building-editor-btn danger" hidden>ลบข้อมูล</button>
+        <div class="building-editor-action-group">
+          <button type="button" id="building-editor-cancel-btn" class="building-editor-btn secondary">ยกเลิก</button>
+          <button type="submit" class="building-editor-btn primary">บันทึกข้อมูล</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+</body>
+</html>

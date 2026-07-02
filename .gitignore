@@ -1,0 +1,9 @@
+# Local source/test files that should not be deployed.
+permission_master.xlsx
+Test.html
+
+# OS/editor noise.
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
