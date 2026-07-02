@@ -102,88 +102,224 @@ body.role-admin .auth-only-admin{display:flex !important;}
 #auth-screen{
   position:fixed; inset:0; z-index:200000;
   display:flex; align-items:center; justify-content:center;
-  padding:24px;
+  padding:28px;
   background:
-    radial-gradient(circle at 18% 18%, rgba(245,158,11,.16), transparent 26%),
-    radial-gradient(circle at 82% 0%, rgba(59,130,246,.18), transparent 32%),
-    linear-gradient(135deg, rgba(7,11,20,.96), rgba(11,18,32,.94));
+    radial-gradient(circle at 16% 18%, rgba(59,130,246,.20), transparent 32%),
+    radial-gradient(circle at 84% 74%, rgba(99,102,241,.18), transparent 34%),
+    radial-gradient(circle at 52% 46%, rgba(14,165,233,.08), transparent 56%),
+    linear-gradient(135deg, #040711 0%, #07101f 52%, #0b1224 100%);
   overflow:hidden;
 }
+body:not(.auth-locked) #auth-screen{display:none;}
+#auth-screen::before,
+#auth-screen::after{
+  content:""; position:absolute; pointer-events:none;
+  border-radius:999px; filter:blur(4px);
+}
 #auth-screen::before{
-  content:""; position:absolute; inset:0;
-  background:
-    linear-gradient(rgba(148,163,184,.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148,163,184,.045) 1px, transparent 1px);
-  background-size:42px 42px;
-  mask-image:radial-gradient(circle at center, black, transparent 74%);
-  pointer-events:none;
+  width:520px; height:520px; left:-160px; top:-180px;
+  background:radial-gradient(circle, rgba(96,165,250,.20), transparent 68%);
 }
 #auth-screen::after{
-  content:""; position:absolute; width:420px; height:420px;
-  right:-140px; bottom:-160px; border-radius:50%;
-  background:radial-gradient(circle, rgba(99,102,241,.26), transparent 68%);
-  filter:blur(10px); pointer-events:none;
+  width:620px; height:620px; right:-210px; bottom:-240px;
+  background:radial-gradient(circle, rgba(129,140,248,.18), transparent 68%);
 }
-body:not(.auth-locked) #auth-screen{display:none;}
-.auth-card{
+#auth-particles{
+  position:absolute; inset:0; width:100%; height:100%;
+  pointer-events:none; z-index:0; opacity:.28;
+}
+
+.auth-card-wrap{
   position:relative; z-index:1;
-  width:min(440px, 100%);
+  perspective:1600px;
+  width:min(430px, 100%);
+  animation:authRise .7s cubic-bezier(.16,1,.3,1);
+}
+@keyframes authRise{
+  from{opacity:0; transform:translateY(28px) scale(.97);}
+  to{opacity:1; transform:translateY(0) scale(1);}
+}
+.auth-card{
+  position:relative;
+  width:100%;
+  display:block;
+  min-height:auto;
+  padding:28px;
   background:
-    linear-gradient(180deg, rgba(15,23,42,.94), rgba(10,16,28,.96)),
-    var(--surface);
-  border:1px solid rgba(148,163,184,.20);
-  border-radius:18px;
-  box-shadow:0 34px 90px rgba(0,0,0,.58), inset 0 1px 0 rgba(255,255,255,.06);
-  padding:30px;
+    linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.025)),
+    rgba(9,15,29,.78);
+  backdrop-filter:blur(34px) saturate(170%);
+  -webkit-backdrop-filter:blur(34px) saturate(170%);
+  border:1px solid rgba(226,232,240,.16);
+  border-radius:24px;
+  box-shadow:
+    var(--shadow-xl),
+    0 28px 80px rgba(2,6,23,.58),
+    0 0 100px rgba(37,99,235,.10),
+    inset 0 1px 0 rgba(255,255,255,.10);
+  overflow:hidden;
+  transform-style:preserve-3d;
+  transition:transform .22s ease-out, box-shadow .22s ease-out;
+  will-change:transform;
 }
 .auth-card::before{
   content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
-  background:linear-gradient(135deg, rgba(245,158,11,.22), transparent 28%, rgba(59,130,246,.18) 72%, transparent);
-  opacity:.55; mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  background:conic-gradient(from var(--auth-angle,0deg),
+    transparent 0deg, rgba(96,165,250,.82) 58deg,
+    transparent 122deg, rgba(129,140,248,.78) 210deg,
+    transparent 288deg, rgba(14,165,233,.70) 360deg);
+  opacity:.46;
+  mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   padding:1px; mask-composite:exclude; -webkit-mask-composite:xor;
 }
-.auth-brand{display:flex; align-items:center; gap:14px; margin-bottom:28px;}
-.auth-brand img{
-  height:48px; width:48px; object-fit:contain; padding:8px;
-  background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.25);
-  border-radius:14px; box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+.auth-card::after{
+  content:""; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.09), transparent 38%),
+    radial-gradient(circle at 50% 0%, rgba(96,165,250,.12), transparent 34%);
+  opacity:.72;
 }
-.auth-brand h2{font-size:22px; line-height:1.1; letter-spacing:-.4px; font-weight:800;}
-.auth-field{display:flex; flex-direction:column; gap:9px; margin-bottom:16px;}
-.auth-field label{font-size:11px; font-weight:800; color:var(--text2); text-transform:uppercase; letter-spacing:.8px;}
+
+.auth-brand{
+  position:relative;
+  display:flex; justify-content:center;
+  padding:4px 0 24px;
+  background:none;
+  border-right:none;
+  border-bottom:1px solid rgba(148,163,184,.14);
+  transform:translateZ(20px);
+  z-index:1;
+}
+.auth-brand .auth-brand-top{display:block;}
+.auth-brand .auth-logo-row{display:flex; flex-direction:column; align-items:center; gap:12px; text-align:center;}
+.auth-brand img{
+  height:64px; width:64px; object-fit:contain; padding:11px;
+  background:rgba(255,255,255,.92);
+  border:1px solid rgba(255,255,255,.28);
+  border-radius:20px;
+  box-shadow:0 18px 34px rgba(2,6,23,.30), 0 0 0 7px rgba(255,255,255,.045);
+}
+.auth-brand h2{
+  font-size:24px; line-height:1.08; letter-spacing:-.35px; font-weight:800;
+  background:linear-gradient(135deg, #fff 0%, #dbeafe 100%);
+  -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+}
+.auth-subtitle{
+  font-size:11px; color:rgba(226,232,240,.62); margin-top:6px; font-weight:700; letter-spacing:.9px;
+  text-transform:uppercase;
+}
+.auth-form-side{
+  display:flex; flex-direction:column; justify-content:center;
+  padding:26px 2px 0;
+  transform:translateZ(30px);
+  position:relative; z-index:1;
+}
+.auth-form-head{margin-bottom:24px; text-align:center;}
+.auth-form-head h3{
+  font-size:22px; font-weight:800; letter-spacing:-.35px; color:var(--text);
+  margin:0;
+}
+.auth-field{display:flex; flex-direction:column; gap:9px; margin-bottom:18px; transform:translateZ(40px);}
+.auth-field label{
+  font-size:11.5px; font-weight:800; color:rgba(226,232,240,.78);
+  text-transform:uppercase; letter-spacing:.9px;
+  display:flex; align-items:center; gap:6px;
+}
+.auth-input-wrap{
+  position:relative; display:flex; align-items:center;
+}
+.auth-icon{
+  position:absolute; left:16px; width:17px; height:17px;
+  color:var(--muted); pointer-events:none;
+  transition:color .18s, transform .18s;
+}
+.auth-input-wrap:focus-within .auth-icon{color:var(--accent); transform:scale(1.1);}
 .auth-field input,
 .auth-field select{
-  width:100%; background:rgba(21,31,51,.78); border:1px solid rgba(148,163,184,.18);
-  color:var(--text); border-radius:12px; padding:13px 14px;
-  font-size:14px; font-family:inherit; outline:none;
+  width:100%;
+  background:rgba(15,23,42,.56);
+  border:1px solid rgba(148,163,184,.22);
+  color:var(--text); border-radius:14px; padding:16px 14px 16px 46px;
+  font-size:14.5px; font-family:inherit; outline:none;
   transition:border-color .18s, box-shadow .18s, background .18s;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
 }
 .auth-field input:focus,
 .auth-field select:focus{
-  border-color:rgba(96,165,250,.78);
-  background:rgba(21,31,51,.96);
-  box-shadow:0 0 0 4px rgba(59,130,246,.14);
+  border-color:rgba(96,165,250,.72);
+  background:rgba(15,23,42,.74);
+  box-shadow:0 0 0 4px rgba(59,130,246,.16), 0 14px 32px rgba(2,6,23,.24);
 }
-.auth-field input::placeholder{color:rgba(148,163,184,.55);}
+.auth-field input::placeholder{color:var(--muted);}
+.auth-toggle-pw{
+  position:absolute; right:7px; top:50%; transform:translateY(-50%);
+  background:none; border:none; padding:8px; cursor:pointer;
+  color:var(--muted); border-radius:9px;
+  display:flex; align-items:center; justify-content:center;
+  transition:color .18s, background .18s;
+}
+.auth-toggle-pw:hover{color:var(--accent); background:var(--accent-soft);}
+.auth-toggle-pw svg{width:18px; height:18px;}
+.auth-divider{
+  display:flex; align-items:center; gap:12px;
+  margin:24px 0 6px; transform:translateZ(20px);
+}
+.auth-divider::before, .auth-divider::after{
+  content:""; flex:1; height:1px;
+  background:linear-gradient(90deg, transparent, rgba(148,163,184,.30), transparent);
+}
 .auth-submit{
-  width:100%; border:none; border-radius:12px; padding:13px 14px;
-  background:linear-gradient(135deg,#2563eb,#4f46e5 58%,#7c3aed); color:#fff; font-family:inherit;
-  font-size:14px; font-weight:800; cursor:pointer;
-  box-shadow:0 16px 32px rgba(59,130,246,.24), inset 0 1px 0 rgba(255,255,255,.22);
+  width:100%; border:none; border-radius:15px; padding:17px 14px;
+  background:linear-gradient(135deg,#2563eb 0%,#3b82f6 46%,#6366f1 100%);
+  color:#fff; font-family:inherit;
+  font-size:15px; font-weight:800; cursor:pointer; letter-spacing:.4px;
+  box-shadow:0 18px 40px rgba(59,130,246,.34), inset 0 1px 0 rgba(255,255,255,.34);
   transition:transform .18s, box-shadow .18s, filter .18s;
+  transform:translateZ(50px);
+  position:relative; z-index:1;
+  margin-top:6px;
+  overflow:hidden;
 }
-.auth-submit:hover{
-  transform:translateY(-1px);
-  filter:saturate(1.08);
-  box-shadow:0 20px 40px rgba(59,130,246,.30), inset 0 1px 0 rgba(255,255,255,.24);
+.auth-submit::after{
+  content:""; position:absolute; top:0; left:-120%;
+  width:60%; height:100%;
+  background:linear-gradient(120deg, transparent, rgba(255,255,255,.35), transparent);
+  transform:skewX(-20deg);
+  animation:authShine 3.2s ease-in-out infinite;
+}
+@keyframes authShine{
+  0%{left:-120%;} 60%,100%{left:140%;}
+}
+.auth-card:hover .auth-submit{
+  transform:translateZ(50px) translateY(-2px);
+  filter:saturate(1.12) brightness(1.05);
+  box-shadow:0 24px 54px rgba(59,130,246,.40), inset 0 1px 0 rgba(255,255,255,.36);
 }
 .auth-message{
-  display:none; margin:14px 0 0; padding:11px 12px;
-  border-radius:10px; font-size:12.5px; line-height:1.5;
+  display:none; margin:16px 0 0; padding:12px 14px;
+  border-radius:11px; font-size:12.5px; line-height:1.5;
   background:var(--red-bg); color:var(--red); border:1px solid rgba(239,68,68,.24);
 }
 .auth-message.show{display:block;}
+
+/* ===== Responsive ===== */
+@media(max-width:860px){
+  .auth-card-wrap{width:min(430px, 100%);}
+  .auth-card{min-height:auto;}
+  .auth-brand{
+    border-right:none; border-bottom:1px solid rgba(148,163,184,.14);
+    padding:4px 0 22px; min-height:auto;
+  }
+  .auth-form-side{padding:24px 0 0;}
+}
+@media(max-width:480px){
+  #auth-screen{padding:14px;}
+  .auth-card{border-radius:22px; padding:24px;}
+  .auth-brand{padding:2px 0 20px;}
+  .auth-form-side{padding:22px 0 0;}
+  .auth-form-head h3{font-size:20px;}
+}
 .user-pill{
   display:flex; align-items:center; gap:8px;
   background:var(--surface2); border:1px solid var(--border);
@@ -283,6 +419,10 @@ body:not(.auth-locked) #auth-screen{display:none;}
 }
 .svg-icon-fill{fill:currentColor; stroke:none;}
 .icon-label{display:inline-flex; align-items:center; gap:7px;}
+.mobile-actions-toggle{display:none;}
+.topbar-actions{
+  display:flex; align-items:center; gap:10px; flex-shrink:0;
+}
 
 /* SEARCH */
 .search-wrap{position:relative; flex:1; max-width:420px; z-index:2000; margin-left:auto;}
@@ -872,10 +1012,49 @@ select.flt.active{
 
 @media(max-width:768px){
   #detail-drawer{width:96vw; max-height:90vh; border-radius:14px;}
-  #topbar{padding:0 14px; gap:10px; height:60px;}
+  #topbar{
+    display:grid;
+    grid-template-columns:1fr auto;
+    grid-template-areas:"logo menu" "search search";
+    align-items:center;
+    height:auto;
+    min-height:104px;
+    padding:10px 14px 12px;
+    gap:9px 10px;
+  }
+  .logo{grid-area:logo; min-width:0;}
+  .logo h1{font-size:14px; overflow:hidden; text-overflow:ellipsis;}
+  .search-wrap{grid-area:search; max-width:none; width:100%; margin-left:0;}
+  .mobile-actions-toggle{
+    grid-area:menu;
+    min-width:44px; min-height:44px;
+    display:flex; align-items:center; justify-content:center; gap:7px;
+    background:var(--surface2); border:1px solid var(--border);
+    color:var(--text2); border-radius:12px; padding:0 12px;
+    cursor:pointer; font-size:12px; font-family:inherit; font-weight:800;
+  }
+  .mobile-actions-toggle[aria-expanded="true"]{
+    border-color:var(--accent); color:var(--accent); background:var(--accent-soft);
+  }
+  .topbar-actions{
+    position:absolute; top:calc(100% + 8px); right:14px;
+    width:min(250px, calc(100vw - 28px));
+    display:none; grid-template-columns:1fr; gap:8px;
+    padding:10px;
+    background:color-mix(in oklab, var(--surface) 94%, transparent);
+    border:1px solid var(--border2); border-radius:14px;
+    box-shadow:var(--shadow-lg); z-index:100000;
+  }
+  .topbar-actions.open{display:grid;}
+  .topbar-actions .total-badge,
+  .topbar-actions .user-pill,
+  .topbar-actions button{
+    width:100%; min-height:44px; justify-content:center;
+  }
+  .topbar-actions .total-badge{display:flex; align-items:center;}
+  .topbar-actions .user-pill strong{display:inline; max-width:130px;}
   #filterbar{padding:8px 14px; gap:6px;}
   .filter-controls{gap:6px;}
-  .logo h1{font-size:14px;}
   #statsbar{gap:6px; bottom:18px; left:14px;}
   .map-mode-toggle{top:10px; left:52px;}
   .map-mode-toggle button{padding:6px 8px; font-size:10px;}
@@ -889,11 +1068,13 @@ select.flt.active{
   .info-grid{grid-template-columns:1fr;}
 }
 @media(max-width:480px){
-  .search-wrap{max-width:200px;}
-  #total-badge{display:none;}
+  .logo-icon{height:34px !important;}
   select.flt{display:none;}
   #f-status{display:block;}
   .filters-collapsed #f-status{display:none;}
+  #filterbar{padding:7px 10px;}
+  .filter-label{display:none;}
+  #result-count{font-size:11px;}
 }
 
 /* FOCUS */
@@ -1248,24 +1429,47 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 <body class="auth-locked">
 
 <div id="auth-screen" aria-live="polite">
-  <form class="auth-card" id="login-form">
-    <div class="auth-brand">
-      <img src="https://img2.pic.in.th/NewLogo.png" alt="Logo">
-      <div>
-        <h2>Permission Next</h2>
+  <canvas id="auth-particles"></canvas>
+  <div class="auth-card-wrap">
+    <form class="auth-card" id="login-form">
+      <div class="auth-brand">
+        <div class="auth-brand-top">
+          <div class="auth-logo-row">
+            <img src="https://img2.pic.in.th/NewLogo.png" alt="Logo">
+            <div>
+              <h2>Permission Next</h2>
+              <p class="auth-subtitle">Building Permission</p>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-    <div class="auth-field">
-      <label for="login-email">Email</label>
-      <input id="login-email" type="email" autocomplete="username" required>
-    </div>
-    <div class="auth-field">
-      <label for="login-password">Password</label>
-      <input id="login-password" type="password" autocomplete="current-password" required placeholder="กรอกรหัสผ่าน">
-    </div>
-    <button class="auth-submit" type="submit">เข้าสู่ระบบ</button>
-    <div class="auth-message" id="login-message"></div>
-  </form>
+      <div class="auth-form-side">
+        <div class="auth-form-head">
+          <h3>เข้าสู่ระบบ</h3>
+        </div>
+        <div class="auth-field">
+          <label for="login-email">Email</label>
+          <div class="auth-input-wrap">
+            <svg class="auth-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+            <input id="login-email" type="email" autocomplete="username" required placeholder="name@company.com">
+          </div>
+        </div>
+        <div class="auth-field">
+          <label for="login-password">Password</label>
+          <div class="auth-input-wrap">
+            <svg class="auth-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <input id="login-password" type="password" autocomplete="current-password" required placeholder="กรอกรหัสผ่าน">
+            <button type="button" class="auth-toggle-pw" aria-label="แสดงรหัสผ่าน">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="auth-divider" aria-hidden="true"></div>
+        <button class="auth-submit" type="submit">เข้าสู่ระบบ</button>
+        <div class="auth-message" id="login-message"></div>
+      </div>
+    </form>
+  </div>
 </div>
 
 <!-- TOP BAR -->
@@ -1274,8 +1478,6 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
     <img src="https://img2.pic.in.th/NewLogo.png" class="logo-icon" alt="Logo" style="height: 40px; width: auto;">
     <h1>Permission <span>Next</span></h1>
   </div>
-  <span class="total-badge" id="total-badge">0</span>
-  <span class="total-badge" id="sync-status" style="background:var(--surface3);color:var(--text2);box-shadow:none;font-weight:600;">กำลังเชื่อมต่อ...</span>
 
   <div class="search-wrap">
     <span class="search-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
@@ -1284,12 +1486,20 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
     <div id="autocomplete"></div>
   </div>
 
-  <button id="add-building-btn" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg> เพิ่มอาคาร</button>
-  <button id="building-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> อาคาร</button>
-  <button id="user-manage-btn" class="auth-only-admin" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg> ผู้ใช้</button>
-  <div class="user-pill" id="current-user-pill" title="ผู้ใช้ปัจจุบัน"><strong>-</strong><span>-</span></div>
-  <button id="logout-btn" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg> ออก</button>
-  <button id="theme-btn" title="เปลี่ยนธีม"><svg id="theme-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> <span id="theme-label">Dark</span></button>
+  <button id="mobile-actions-toggle" class="mobile-actions-toggle" type="button" aria-expanded="false" aria-controls="topbar-actions" title="เมนู">
+    <svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></svg>
+    <span>เมนู</span>
+  </button>
+  <div id="topbar-actions" class="topbar-actions">
+    <span class="total-badge" id="total-badge">0</span>
+    <span class="total-badge" id="sync-status" style="background:var(--surface3);color:var(--text2);box-shadow:none;font-weight:600;">กำลังเชื่อมต่อ...</span>
+    <button id="add-building-btn" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg> เพิ่มอาคาร</button>
+    <button id="building-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> อาคาร</button>
+    <button id="user-manage-btn" class="auth-only-admin" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg> ผู้ใช้</button>
+    <div class="user-pill" id="current-user-pill" title="ผู้ใช้ปัจจุบัน"><strong>-</strong><span>-</span></div>
+    <button id="logout-btn" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg> ออก</button>
+    <button id="theme-btn" title="เปลี่ยนธีม"><svg id="theme-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> <span id="theme-label">Dark</span></button>
+  </div>
 </div>
 
 <!-- FILTER BAR -->
@@ -3403,6 +3613,136 @@ document.addEventListener('DOMContentLoaded', function() {
   const buildingEditorCancelBtn = document.getElementById('building-editor-cancel-btn');
   const buildingEditorDeleteBtn = document.getElementById('building-editor-delete-btn');
   const otherFeeAddBtn = document.getElementById('other-fee-add-btn');
+
+  (function initMobileTopbarActions(){
+    const toggle = document.getElementById('mobile-actions-toggle');
+    const menu = document.getElementById('topbar-actions');
+    if (!toggle || !menu) return;
+
+    function setOpen(open) {
+      menu.classList.toggle('open', open);
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    toggle.addEventListener('click', function(e) {
+      e.stopPropagation();
+      setOpen(!menu.classList.contains('open'));
+    });
+
+    menu.addEventListener('click', function(e) {
+      if (e.target.closest('button')) setTimeout(() => setOpen(false), 0);
+    }, true);
+
+    document.addEventListener('click', function(e) {
+      if (!menu.contains(e.target) && e.target !== toggle) setOpen(false);
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') setOpen(false);
+    });
+  })();
+
+  /* ---- Auth: Particle Animation ---- */
+  (function initAuthParticles(){
+    const canvas = document.getElementById('auth-particles');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+    const COUNT = 60;
+    const CONNECT_DIST = 120;
+    function resize(){
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+    function createParticle(){
+      return {
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        r: Math.random() * 1.8 + 0.6
+      };
+    }
+    for (let i = 0; i < COUNT; i++) particles.push(createParticle());
+    function draw(){
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < particles.length; i++){
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < 0) p.x = canvas.width;
+        if (p.x > canvas.width) p.x = 0;
+        if (p.y < 0) p.y = canvas.height;
+        if (p.y > canvas.height) p.y = 0;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(96,165,250,' + (0.35 + p.r * 0.15) + ')';
+        ctx.fill();
+        for (let j = i + 1; j < particles.length; j++){
+          const q = particles[j];
+          const dx = p.x - q.x, dy = p.y - q.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < CONNECT_DIST){
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(q.x, q.y);
+            ctx.strokeStyle = 'rgba(99,102,241,' + (0.12 * (1 - dist / CONNECT_DIST)) + ')';
+            ctx.lineWidth = 0.6;
+            ctx.stroke();
+          }
+        }
+      }
+      if (document.body.classList.contains('auth-locked')) requestAnimationFrame(draw);
+    }
+    requestAnimationFrame(draw);
+  })();
+
+  /* ---- Auth: 3D Tilt Effect ---- */
+  (function initAuthTilt(){
+    const card = document.querySelector('.auth-card');
+    if (!card) return;
+    let targetRx = 0, targetRy = 0, currentRx = 0, currentRy = 0;
+    let angle = 0;
+    card.style.animation = 'none';
+    card.addEventListener('mousemove', function(e){
+      const rect = card.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      targetRy = ((e.clientX - cx) / (rect.width / 2)) * 8;
+      targetRx = -((e.clientY - cy) / (rect.height / 2)) * 8;
+    });
+    card.addEventListener('mouseleave', function(){
+      targetRx = 0; targetRy = 0;
+    });
+    function animate(){
+      currentRx += (targetRx - currentRx) * 0.12;
+      currentRy += (targetRy - currentRy) * 0.12;
+      angle = (angle + 0.8) % 360;
+      const floatY = -6 * Math.sin(Date.now() / 1300);
+      card.style.transform = 'translateY(' + floatY.toFixed(2) + 'px) rotateX(' + currentRx.toFixed(2) + 'deg) rotateY(' + currentRy.toFixed(2) + 'deg)';
+      card.style.setProperty('--auth-angle', angle + 'deg');
+      if (document.getElementById('auth-screen') && document.body.classList.contains('auth-locked')){
+        requestAnimationFrame(animate);
+      }
+    }
+    requestAnimationFrame(animate);
+  })();
+
+  /* ---- Auth: Show/Hide Password ---- */
+  (function initPwToggle(){
+    const btn = document.querySelector('.auth-toggle-pw');
+    const pwInput = document.getElementById('login-password');
+    if (!btn || !pwInput) return;
+    const eyeOpen = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>';
+    const eyeClosed = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/></svg>';
+    btn.addEventListener('click', function(){
+      const isPassword = pwInput.type === 'password';
+      pwInput.type = isPassword ? 'text' : 'password';
+      btn.innerHTML = isPassword ? eyeClosed : eyeOpen;
+      btn.setAttribute('aria-label', isPassword ? 'ซ่อนรหัสผ่าน' : 'แสดงรหัสผ่าน');
+    });
+  })();
 
   if (loginForm) {
     loginForm.addEventListener('submit', async function(e) {
