@@ -19,3 +19,19 @@ Static dashboard for Cloudflare Pages.
 - `_headers` - basic HTTP headers for the static site
 
 `permission_master.xlsx` and `Test.html` are ignored by git so local source/test files do not get published accidentally.
+
+## Basic Login
+
+The app includes a basic in-app login gate backed by the existing Firestore database. On first load, it seeds this admin account if missing:
+
+- ID: `admin101@uih.co.th`
+- Password: `admin101`
+- Role: `admin`
+
+Roles:
+
+- `admin` - manage buildings and users
+- `permission` - manage buildings
+- `sale` - view/search buildings and create preliminary quotations
+
+This is a lightweight client-side access layer, not a replacement for server-side security rules.

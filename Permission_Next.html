@@ -87,6 +87,120 @@ body{
   -webkit-font-smoothing:antialiased;
   font-feature-settings:"cv11","ss01","ss03";
 }
+body.auth-locked #topbar,
+body.auth-locked #filterbar,
+body.auth-locked #main{
+  filter:blur(2px);
+  pointer-events:none;
+  user-select:none;
+}
+.auth-only-admin{display:none !important;}
+body.role-admin .auth-only-admin{display:flex !important;}
+.role-hidden{display:none !important;}
+
+/* ====== AUTH ====== */
+#auth-screen{
+  position:fixed; inset:0; z-index:200000;
+  display:flex; align-items:center; justify-content:center;
+  padding:24px; background:rgba(7,11,20,.86);
+  backdrop-filter:blur(18px) saturate(130%);
+  -webkit-backdrop-filter:blur(18px) saturate(130%);
+}
+body:not(.auth-locked) #auth-screen{display:none;}
+.auth-card{
+  width:min(420px, 100%);
+  background:linear-gradient(180deg, color-mix(in oklab, var(--surface) 96%, transparent), var(--surface));
+  border:1px solid var(--border2);
+  border-radius:14px;
+  box-shadow:var(--shadow-xl);
+  padding:26px;
+}
+.auth-brand{display:flex; align-items:center; gap:12px; margin-bottom:20px;}
+.auth-brand img{height:38px; width:auto;}
+.auth-brand h2{font-size:18px; line-height:1.2; letter-spacing:-.2px;}
+.auth-brand p{font-size:12px; color:var(--text2); margin-top:4px;}
+.auth-field{display:flex; flex-direction:column; gap:7px; margin-bottom:14px;}
+.auth-field label{font-size:12px; font-weight:700; color:var(--text2);}
+.auth-field input,
+.auth-field select{
+  width:100%; background:var(--surface2); border:1px solid var(--border);
+  color:var(--text); border-radius:10px; padding:11px 12px;
+  font-size:14px; font-family:inherit; outline:none;
+}
+.auth-field input:focus,
+.auth-field select:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft);}
+.auth-submit{
+  width:100%; border:none; border-radius:10px; padding:12px 14px;
+  background:var(--grad-accent); color:#fff; font-family:inherit;
+  font-size:14px; font-weight:800; cursor:pointer;
+  box-shadow:0 10px 24px var(--accent-glow);
+}
+.auth-message{
+  display:none; margin:14px 0 0; padding:11px 12px;
+  border-radius:10px; font-size:12.5px; line-height:1.5;
+  background:var(--red-bg); color:var(--red); border:1px solid rgba(239,68,68,.24);
+}
+.auth-message.show{display:block;}
+.auth-note{font-size:11.5px; color:var(--muted); margin-top:14px; line-height:1.55;}
+.user-pill{
+  display:flex; align-items:center; gap:8px;
+  background:var(--surface2); border:1px solid var(--border);
+  color:var(--text2); border-radius:999px; padding:7px 11px;
+  font-size:12px; font-weight:700; white-space:nowrap;
+}
+.user-pill strong{color:var(--text); font-size:12px; max-width:170px; overflow:hidden; text-overflow:ellipsis;}
+.user-pill span{color:var(--accent); text-transform:uppercase; font-size:10.5px; letter-spacing:.5px;}
+#user-manage-btn,
+#logout-btn{
+  background:var(--surface2); border:1px solid var(--border);
+  color:var(--text2); border-radius:9px; padding:8px 12px;
+  cursor:pointer; font-size:12.5px; white-space:nowrap;
+  transition:all .18s; flex-shrink:0;
+  display:flex; align-items:center; gap:7px;
+  font-family:inherit; font-weight:600; letter-spacing:.2px;
+}
+#user-manage-btn:hover,
+#logout-btn:hover{border-color:var(--accent); color:var(--accent); background:var(--accent-soft);}
+#user-admin-modal{
+  position:fixed; inset:0; z-index:120000; display:none;
+  background:rgba(0,0,0,.58); backdrop-filter:blur(10px);
+  align-items:center; justify-content:center; padding:18px;
+}
+#user-admin-modal.open{display:flex; animation:fadeIn .25s ease;}
+.user-admin-container{
+  width:min(980px, 96vw); max-height:92vh; overflow:hidden;
+  background:var(--surface); border:1px solid var(--border2);
+  border-radius:14px; box-shadow:var(--shadow-xl);
+  display:grid; grid-template-columns:minmax(280px, 360px) 1fr;
+}
+.user-admin-panel{padding:22px; border-right:1px solid var(--border); overflow:auto;}
+.user-admin-list{padding:22px; overflow:auto;}
+.user-admin-head{display:flex; justify-content:space-between; align-items:flex-start; gap:14px; margin-bottom:18px;}
+.user-admin-head h3{font-size:18px; letter-spacing:-.2px;}
+.user-admin-head p{font-size:12px; color:var(--text2); margin-top:4px;}
+.user-admin-close{
+  background:var(--surface2); border:1px solid var(--border); color:var(--text2);
+  border-radius:9px; padding:8px 10px; cursor:pointer; font-family:inherit;
+}
+.user-admin-close:hover{background:var(--red-bg); color:var(--red); border-color:var(--red);}
+.user-form-actions{display:flex; gap:10px; align-items:center; margin-top:8px;}
+.user-admin-btn{
+  border:1px solid var(--border2); border-radius:10px; padding:10px 13px;
+  cursor:pointer; font-family:inherit; font-size:12.5px; font-weight:800;
+  background:var(--surface2); color:var(--text2);
+}
+.user-admin-btn.primary{border:none; background:var(--grad-accent); color:#fff;}
+.user-admin-btn.danger{color:var(--red); border-color:rgba(239,68,68,.35); background:var(--red-bg);}
+.user-table{width:100%; border-collapse:collapse;}
+.user-table th,.user-table td{padding:11px 10px; border-bottom:1px solid var(--border); text-align:left; font-size:12.5px;}
+.user-table th{color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.6px;}
+.user-role-badge{display:inline-flex; border-radius:999px; padding:4px 9px; background:var(--accent-soft); color:var(--accent); font-size:11px; font-weight:800; text-transform:uppercase;}
+.user-row-actions{display:flex; gap:8px; justify-content:flex-end;}
+@media (max-width: 860px){
+  .user-admin-container{grid-template-columns:1fr;}
+  .user-admin-panel{border-right:none; border-bottom:1px solid var(--border);}
+  .user-pill strong{display:none;}
+}
 
 /* ====== TOPBAR ====== */
 #topbar{
@@ -1074,7 +1188,30 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 }
 </style>
 </head>
-<body>
+<body class="auth-locked">
+
+<div id="auth-screen" aria-live="polite">
+  <form class="auth-card" id="login-form">
+    <div class="auth-brand">
+      <img src="https://img2.pic.in.th/NewLogo.png" alt="Logo">
+      <div>
+        <h2>Permission Next</h2>
+        <p>เข้าสู่ระบบเพื่อใช้งาน Dashboard</p>
+      </div>
+    </div>
+    <div class="auth-field">
+      <label for="login-email">ID / Email</label>
+      <input id="login-email" type="email" autocomplete="username" required placeholder="admin101@uih.co.th">
+    </div>
+    <div class="auth-field">
+      <label for="login-password">Password</label>
+      <input id="login-password" type="password" autocomplete="current-password" required placeholder="กรอกรหัสผ่าน">
+    </div>
+    <button class="auth-submit" type="submit">เข้าสู่ระบบ</button>
+    <div class="auth-message" id="login-message"></div>
+    <p class="auth-note">ระบบล็อกอินเบื้องต้นนี้ใช้บัญชีผู้ใช้ใน Firestore ของแอป และให้แอดมินจัดการผู้ใช้ได้จากหน้าเว็บ</p>
+  </form>
+</div>
 
 <!-- TOP BAR -->
 <div id="topbar">
@@ -1094,6 +1231,9 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 
   <button id="add-building-btn" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg> เพิ่มอาคาร</button>
   <button id="building-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> อาคาร</button>
+  <button id="user-manage-btn" class="auth-only-admin" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg> ผู้ใช้</button>
+  <div class="user-pill" id="current-user-pill" title="ผู้ใช้ปัจจุบัน"><strong>-</strong><span>-</span></div>
+  <button id="logout-btn" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg> ออก</button>
   <button id="theme-btn" title="เปลี่ยนธีม"><svg id="theme-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg> <span id="theme-label">Dark</span></button>
 </div>
 
@@ -1250,7 +1390,7 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
-    getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot,
+    getFirestore, collection, doc, getDoc, setDoc, deleteDoc, onSnapshot,
     writeBatch, getDocs, query, limit, enableIndexedDbPersistence
   } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
@@ -1275,6 +1415,7 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
   });
 
   const buildingsCol = collection(db, 'buildings');
+  const usersCol = collection(db, 'app_users');
 
   // เปิด API ชุดเล็ก ๆ ให้สคริปต์หลัก (classic script) ของแอปเรียกใช้ผ่าน window.FSDB
   window.FSDB = {
@@ -1288,7 +1429,18 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
     commitBatch: (batch) => batch.commit(),
     setDoc: (id, data) => setDoc(doc(buildingsCol, String(id)), data, { merge: true }),
     deleteDoc: (id) => deleteDoc(doc(buildingsCol, String(id))),
-    onSnapshot: (onNext, onError) => onSnapshot(buildingsCol, onNext, onError)
+    onSnapshot: (onNext, onError) => onSnapshot(buildingsCol, onNext, onError),
+    async getUser(email) {
+      const snap = await getDoc(doc(usersCol, String(email).toLowerCase()));
+      return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+    },
+    async isUsersEmpty() {
+      const snap = await getDocs(query(usersCol, limit(1)));
+      return snap.empty;
+    },
+    setUser: (email, data) => setDoc(doc(usersCol, String(email).toLowerCase()), data, { merge: true }),
+    deleteUser: (email) => deleteDoc(doc(usersCol, String(email).toLowerCase())),
+    onUsersSnapshot: (onNext, onError) => onSnapshot(usersCol, onNext, onError)
   };
 
   window.dispatchEvent(new Event('fsdb-ready'));
@@ -1345,6 +1497,275 @@ function stripInternalFields(rec) {
   delete clean._searchText;
   delete clean._nameSearchText;
   return clean;
+}
+
+// ====== BASIC AUTH / ROLES ======
+const AUTH_SESSION_KEY = 'permission_next_session_v1';
+const PASSWORD_SALT = 'permission-next-basic-auth-v1';
+const DEFAULT_ADMIN = {
+  email: 'admin101@uih.co.th',
+  password: 'admin101',
+  role: 'admin',
+  display_name: 'Admin'
+};
+const ROLE_LABELS = {
+  admin: 'Admin',
+  permission: 'Permission',
+  sale: 'Sale'
+};
+
+let APP_USERS = [];
+let usersUnsub = null;
+let currentUser = null;
+
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+function roleLabel(role) {
+  return ROLE_LABELS[role] || role || '-';
+}
+
+function canManageUsers() {
+  return currentUser?.role === 'admin';
+}
+
+function canManageBuildings() {
+  return ['admin', 'permission'].includes(currentUser?.role);
+}
+
+function setBoxMessage(id, message, isError = true) {
+  const box = document.getElementById(id);
+  if (!box) return;
+  box.textContent = message || '';
+  box.style.color = isError ? 'var(--red)' : 'var(--green)';
+  box.style.background = isError ? 'var(--red-bg)' : 'var(--green-bg)';
+  box.style.borderColor = isError ? 'rgba(239,68,68,.24)' : 'rgba(16,185,129,.24)';
+  box.classList.toggle('show', Boolean(message));
+}
+
+async function sha256(text) {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function passwordHash(email, password) {
+  return sha256(`${password}:${PASSWORD_SALT}`);
+}
+
+function readSavedSession() {
+  try {
+    return JSON.parse(localStorage.getItem(AUTH_SESSION_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(user) {
+  localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify({
+    email: user.email,
+    role: user.role,
+    display_name: user.display_name || '',
+    saved_at: Date.now()
+  }));
+}
+
+function clearSession() {
+  localStorage.removeItem(AUTH_SESSION_KEY);
+}
+
+function sanitizeUser(user) {
+  if (!user) return null;
+  return {
+    email: normalizeEmail(user.email || user.id),
+    role: user.role || 'sale',
+    display_name: user.display_name || '',
+    disabled: Boolean(user.disabled),
+    created_at: user.created_at || null,
+    updated_at: user.updated_at || null
+  };
+}
+
+function applyRoleUi() {
+  document.body.classList.toggle('role-admin', canManageUsers());
+  document.body.classList.toggle('role-permission', currentUser?.role === 'permission');
+  document.body.classList.toggle('role-sale', currentUser?.role === 'sale');
+
+  const pill = document.getElementById('current-user-pill');
+  if (pill) {
+    pill.querySelector('strong').textContent = currentUser?.display_name || currentUser?.email || '-';
+    pill.querySelector('span').textContent = roleLabel(currentUser?.role);
+  }
+
+  document.getElementById('add-building-btn')?.classList.toggle('role-hidden', !canManageBuildings());
+  document.querySelectorAll('.edit-building-btn').forEach(btn => {
+    btn.classList.toggle('role-hidden', !canManageBuildings());
+  });
+  document.getElementById('building-editor-delete-btn')?.classList.toggle('role-hidden', !canManageBuildings());
+}
+
+function setCurrentUser(user) {
+  currentUser = user ? sanitizeUser(user) : null;
+  if (currentUser) {
+    document.body.classList.remove('auth-locked');
+    saveSession(currentUser);
+  } else {
+    document.body.classList.add('auth-locked');
+    clearSession();
+  }
+  applyRoleUi();
+}
+
+async function ensureDefaultAdminUser() {
+  const isEmpty = await window.FSDB.isUsersEmpty();
+  const existingAdmin = await window.FSDB.getUser(DEFAULT_ADMIN.email);
+  if (!isEmpty && existingAdmin) return;
+  await window.FSDB.setUser(DEFAULT_ADMIN.email, {
+    email: DEFAULT_ADMIN.email,
+    role: DEFAULT_ADMIN.role,
+    display_name: DEFAULT_ADMIN.display_name,
+    password_hash: await passwordHash(DEFAULT_ADMIN.email, DEFAULT_ADMIN.password),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  });
+}
+
+function startUsersSync() {
+  if (usersUnsub) usersUnsub();
+  usersUnsub = window.FSDB.onUsersSnapshot(
+    snapshot => {
+      APP_USERS = snapshot.docs.map(docSnap => sanitizeUser({ id: docSnap.id, ...docSnap.data() }))
+        .filter(Boolean)
+        .sort((a, b) => a.email.localeCompare(b.email));
+      renderUserAdminList();
+      if (currentUser) {
+        const latest = APP_USERS.find(u => u.email === currentUser.email && !u.disabled);
+        if (!latest) {
+          setCurrentUser(null);
+          setBoxMessage('login-message', 'บัญชีนี้ถูกปิดใช้งานหรือถูกลบแล้ว กรุณาเข้าสู่ระบบใหม่');
+        } else if (latest.role !== currentUser.role || latest.display_name !== currentUser.display_name) {
+          setCurrentUser(latest);
+        }
+      }
+    },
+    err => console.error('Users sync error:', err)
+  );
+}
+
+async function restoreSession() {
+  const saved = readSavedSession();
+  if (!saved?.email) return;
+  const user = await window.FSDB.getUser(saved.email);
+  if (user && !user.disabled) setCurrentUser(user);
+}
+
+async function initAuth() {
+  try {
+    await ensureDefaultAdminUser();
+    startUsersSync();
+    await restoreSession();
+  } catch (err) {
+    console.error('Auth init error:', err);
+    setBoxMessage('login-message', 'เริ่มต้นระบบผู้ใช้ไม่สำเร็จ: ' + err.message);
+  }
+}
+
+async function loginWithPassword(email, password) {
+  const cleanEmail = normalizeEmail(email);
+  if (!cleanEmail || !password) throw new Error('กรุณากรอก ID และ Password');
+  const user = await window.FSDB.getUser(cleanEmail);
+  if (!user || user.disabled) throw new Error('ไม่พบบัญชีผู้ใช้ หรือบัญชีถูกปิดใช้งาน');
+  const hash = await passwordHash(cleanEmail, password);
+  if (hash !== user.password_hash) throw new Error('ID หรือ Password ไม่ถูกต้อง');
+  setCurrentUser(user);
+}
+
+function resetUserForm() {
+  const form = document.getElementById('user-admin-form');
+  if (!form) return;
+  form.reset();
+  form.elements['editing_email'].value = '';
+  form.elements['password'].required = true;
+  setBoxMessage('user-admin-message', '');
+}
+
+function editUser(email) {
+  const user = APP_USERS.find(u => u.email === normalizeEmail(email));
+  const form = document.getElementById('user-admin-form');
+  if (!user || !form) return;
+  form.elements['editing_email'].value = user.email;
+  form.elements['email'].value = user.email;
+  form.elements['role'].value = user.role;
+  form.elements['display_name'].value = user.display_name || '';
+  form.elements['password'].value = '';
+  form.elements['password'].required = false;
+  setBoxMessage('user-admin-message', 'กำลังแก้ไขผู้ใช้: ' + user.email, false);
+}
+
+async function deleteUserAccount(email) {
+  if (!canManageUsers()) return;
+  const cleanEmail = normalizeEmail(email);
+  if (cleanEmail === currentUser?.email) {
+    setBoxMessage('user-admin-message', 'ไม่สามารถลบบัญชีที่กำลังใช้งานอยู่ได้');
+    return;
+  }
+  if (!confirm('ต้องการลบผู้ใช้นี้หรือไม่: ' + cleanEmail)) return;
+  await window.FSDB.deleteUser(cleanEmail);
+  setBoxMessage('user-admin-message', 'ลบผู้ใช้เรียบร้อยแล้ว', false);
+}
+
+async function saveUserFromForm(form) {
+  if (!canManageUsers()) return;
+  const formData = new FormData(form);
+  const editingEmail = normalizeEmail(formData.get('editing_email'));
+  const email = normalizeEmail(formData.get('email'));
+  const password = String(formData.get('password') || '');
+  const role = String(formData.get('role') || 'sale');
+  const displayName = String(formData.get('display_name') || '').trim();
+
+  if (!email) throw new Error('กรุณากรอก ID / Email');
+  if (!['admin', 'permission', 'sale'].includes(role)) throw new Error('Role ไม่ถูกต้อง');
+  if (!editingEmail && !password) throw new Error('กรุณากรอกรหัสผ่านสำหรับผู้ใช้ใหม่');
+
+  const existing = editingEmail ? await window.FSDB.getUser(editingEmail) : null;
+  const payload = {
+    email,
+    role,
+    display_name: displayName,
+    updated_at: new Date().toISOString()
+  };
+  if (!existing) payload.created_at = new Date().toISOString();
+  if (password) payload.password_hash = await passwordHash(email, password);
+
+  if (editingEmail && editingEmail !== email) {
+    await window.FSDB.setUser(email, { ...existing, ...payload, email });
+    await window.FSDB.deleteUser(editingEmail);
+  } else {
+    await window.FSDB.setUser(email, payload);
+  }
+  resetUserForm();
+  setBoxMessage('user-admin-message', 'บันทึกผู้ใช้เรียบร้อยแล้ว', false);
+}
+
+function renderUserAdminList() {
+  const tbody = document.getElementById('user-admin-list');
+  const count = document.getElementById('user-admin-count');
+  if (count) count.textContent = APP_USERS.length + ' users';
+  if (!tbody) return;
+  tbody.innerHTML = APP_USERS.map(user => `
+    <tr>
+      <td>${esc(user.email)}</td>
+      <td><span class="user-role-badge">${esc(roleLabel(user.role))}</span></td>
+      <td>${esc(user.display_name || '-')}</td>
+      <td>
+        <div class="user-row-actions">
+          <button class="user-admin-btn" type="button" data-user-edit="${attrEsc(user.email)}">แก้ไข</button>
+          <button class="user-admin-btn danger" type="button" data-user-delete="${attrEsc(user.email)}">ลบ</button>
+        </div>
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="4" style="color:var(--muted);text-align:center;">ยังไม่มีผู้ใช้</td></tr>';
 }
 
 // ------ นำเข้าข้อมูลเดิม (RAW_DATA) เข้า Firestore ครั้งแรกเท่านั้น ------
@@ -1414,6 +1835,7 @@ async function initFirestoreData() {
 }
 
 whenFsdbReady(initFirestoreData);
+whenFsdbReady(initAuth);
 
 if (typeof L === 'undefined') {
   const mapEl = document.getElementById('map');
@@ -1731,7 +2153,7 @@ function openDrawer(r) {
   document.getElementById('tab-general').innerHTML = `
     <div class="section-head" style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
       <span>ข้อมูลอาคาร</span>
-      <button class="edit-building-btn" type="button" data-building-id="${attrEsc(r.id)}" style="border:1px solid var(--border2);background:var(--surface2);color:var(--text2);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px;">แก้ไขข้อมูล</button>
+      ${canManageBuildings() ? `<button class="edit-building-btn" type="button" data-building-id="${attrEsc(r.id)}" style="border:1px solid var(--border2);background:var(--surface2);color:var(--text2);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px;">แก้ไขข้อมูล</button>` : ''}
     </div>
     <div class="info-grid">
       <div class="info-cell"><label>Area</label><p>${esc(r.area||'—')}</p></div>
@@ -1751,6 +2173,7 @@ function openDrawer(r) {
       </div>` : ''}
     </div>
   `;
+  applyRoleUi();
 
   // Tab: Contact
   const contacts = (String(r.contact||'')).split(/[,\/]/).map(s=>s.trim()).filter(Boolean);
@@ -1826,6 +2249,10 @@ document.getElementById('tab-general').addEventListener('click', e => {
   }
   const editBtn = e.target.closest('.edit-building-btn');
   if (editBtn) {
+    if (!canManageBuildings()) {
+      alert('บัญชีนี้ไม่มีสิทธิ์แก้ไขข้อมูลอาคาร');
+      return;
+    }
     const record = DATA.find(d => String(d.id) === String(editBtn.dataset.buildingId));
     openBuildingEditor(record || null);
     return;
@@ -2207,6 +2634,10 @@ function findDuplicateBuilding(payload, existingId) {
 }
 
 function openBuildingEditor(record = null) {
+  if (!canManageBuildings()) {
+    alert('บัญชีนี้ไม่มีสิทธิ์จัดการข้อมูลอาคาร');
+    return;
+  }
   const modal = document.getElementById('building-editor-modal');
   const form = document.getElementById('building-editor-form');
   const deleteBtn = document.getElementById('building-editor-delete-btn');
@@ -2262,6 +2693,10 @@ function closeDetailDrawerAfterDelete() {
 }
 
 async function deleteBuildingFromForm(form) {
+  if (!canManageBuildings()) {
+    alert('บัญชีนี้ไม่มีสิทธิ์ลบข้อมูลอาคาร');
+    return;
+  }
   const id = form?.elements['record_id']?.value;
   if (!id) return;
 
@@ -2283,6 +2718,10 @@ async function deleteBuildingFromForm(form) {
 }
 
 async function saveBuildingFromForm(form) {
+  if (!canManageBuildings()) {
+    setBuildingEditorMessage('บัญชีนี้ไม่มีสิทธิ์บันทึกข้อมูลอาคาร');
+    return;
+  }
   const formData = new FormData(form);
   const existingId = formData.get('record_id');
   clearBuildingEditorInvalidState(form);
@@ -2782,6 +3221,14 @@ function resetQuotationForm(options = {}) {
 
 // Quotation button event listener
 document.addEventListener('DOMContentLoaded', function() {
+  const loginForm = document.getElementById('login-form');
+  const logoutBtn = document.getElementById('logout-btn');
+  const userManageBtn = document.getElementById('user-manage-btn');
+  const userAdminModal = document.getElementById('user-admin-modal');
+  const userAdminCloseBtn = document.getElementById('user-admin-close-btn');
+  const userAdminForm = document.getElementById('user-admin-form');
+  const userFormResetBtn = document.getElementById('user-form-reset-btn');
+  const userAdminList = document.getElementById('user-admin-list');
   const addBuildingBtn = document.getElementById('add-building-btn');
   const quotationModal = document.getElementById('quotation-modal');
   const buildingEditorModal = document.getElementById('building-editor-modal');
@@ -2790,6 +3237,76 @@ document.addEventListener('DOMContentLoaded', function() {
   const buildingEditorCancelBtn = document.getElementById('building-editor-cancel-btn');
   const buildingEditorDeleteBtn = document.getElementById('building-editor-delete-btn');
   const otherFeeAddBtn = document.getElementById('other-fee-add-btn');
+
+  if (loginForm) {
+    loginForm.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      setBoxMessage('login-message', '');
+      const email = document.getElementById('login-email')?.value;
+      const password = document.getElementById('login-password')?.value;
+      try {
+        await loginWithPassword(email, password);
+        loginForm.reset();
+      } catch (err) {
+        setBoxMessage('login-message', err.message || 'เข้าสู่ระบบไม่สำเร็จ');
+      }
+    });
+  }
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', function() {
+      setCurrentUser(null);
+      document.getElementById('login-email')?.focus();
+    });
+  }
+
+  if (userManageBtn) {
+    userManageBtn.addEventListener('click', function() {
+      if (!canManageUsers()) return;
+      renderUserAdminList();
+      userAdminModal?.classList.add('open');
+    });
+  }
+
+  if (userAdminModal) {
+    userAdminModal.addEventListener('click', function(e) {
+      if (e.target === userAdminModal) {
+        userAdminModal.classList.remove('open');
+        resetUserForm();
+      }
+    });
+  }
+  if (userAdminCloseBtn) {
+    userAdminCloseBtn.addEventListener('click', function() {
+      userAdminModal?.classList.remove('open');
+      resetUserForm();
+    });
+  }
+  if (userFormResetBtn) {
+    userFormResetBtn.addEventListener('click', resetUserForm);
+  }
+  if (userAdminForm) {
+    userAdminForm.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      try {
+        await saveUserFromForm(userAdminForm);
+      } catch (err) {
+        setBoxMessage('user-admin-message', err.message || 'บันทึกผู้ใช้ไม่สำเร็จ');
+      }
+    });
+  }
+  if (userAdminList) {
+    userAdminList.addEventListener('click', async function(e) {
+      const editBtn = e.target.closest('[data-user-edit]');
+      const deleteBtn = e.target.closest('[data-user-delete]');
+      try {
+        if (editBtn) editUser(editBtn.dataset.userEdit);
+        if (deleteBtn) await deleteUserAccount(deleteBtn.dataset.userDelete);
+      } catch (err) {
+        setBoxMessage('user-admin-message', err.message || 'จัดการผู้ใช้ไม่สำเร็จ');
+      }
+    });
+  }
   
   if (addBuildingBtn) {
     addBuildingBtn.addEventListener('click', function() {
@@ -3088,6 +3605,65 @@ document.addEventListener('DOMContentLoaded', function() {
         <button class="quotation-btn quotation-btn-warning" id="quotation-image-btn" type="button"><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="10" r="1.5"/><path d="m21 15-5-5L5 19"/></svg>Image</span></button>
       </div>
       <div id="quotation-export-message"></div>
+    </div>
+  </div>
+</div>
+
+<div id="user-admin-modal">
+  <div class="user-admin-container">
+    <form class="user-admin-panel" id="user-admin-form">
+      <div class="user-admin-head">
+        <div>
+          <h3>จัดการผู้ใช้</h3>
+          <p>เพิ่มหรือแก้ไขสิทธิ์ผู้ใช้สำหรับระบบ Permission Next</p>
+        </div>
+      </div>
+      <input type="hidden" name="editing_email">
+      <div id="user-admin-message" class="building-editor-message" role="alert"></div>
+      <div class="auth-field">
+        <label for="user-email">ID / Email *</label>
+        <input id="user-email" name="email" type="email" required autocomplete="off" placeholder="user@uih.co.th">
+      </div>
+      <div class="auth-field">
+        <label for="user-password">Password *</label>
+        <input id="user-password" name="password" type="password" autocomplete="new-password" placeholder="กรอกรหัสผ่าน">
+      </div>
+      <div class="auth-field">
+        <label for="user-role">Role *</label>
+        <select id="user-role" name="role" required>
+          <option value="sale">sale</option>
+          <option value="permission">permission</option>
+          <option value="admin">admin</option>
+        </select>
+      </div>
+      <div class="auth-field">
+        <label for="user-display-name">ชื่อที่แสดง</label>
+        <input id="user-display-name" name="display_name" type="text" autocomplete="off" placeholder="เช่น Sale Team">
+      </div>
+      <div class="user-form-actions">
+        <button class="user-admin-btn primary" type="submit">บันทึกผู้ใช้</button>
+        <button class="user-admin-btn" id="user-form-reset-btn" type="button">ล้างฟอร์ม</button>
+      </div>
+    </form>
+    <div class="user-admin-list">
+      <div class="user-admin-head">
+        <div>
+          <h3>รายชื่อผู้ใช้</h3>
+          <p id="user-admin-count">0 users</p>
+        </div>
+        <button id="user-admin-close-btn" class="user-admin-close" type="button">ปิด</button>
+      </div>
+      <table class="user-table">
+        <thead>
+          <tr>
+            <th>ID / Email</th>
+            <th>Role</th>
+            <th>ชื่อ</th>
+            <th style="text-align:right;">จัดการ</th>
+          </tr>
+        </thead>
+        <tbody id="user-admin-list"></tbody>
+      </table>
     </div>
   </div>
 </div>
