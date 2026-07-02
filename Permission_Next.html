@@ -3118,17 +3118,24 @@ function calculateQuotation() {
     shaftInfoEl.style.display = 'none';
   }
 
-  // หมายเหตุ: เงินประกันความเสียหาย (damage_deposit) เป็นเงินประกัน จึงไม่นำมาคิดในใบประเมินราคา
-  // ส่วนค่ากรมธรรม์ (insurance_fee) เป็นค่าใช้จ่ายจริง จึงนำมาคิด
+  const additionalBuildingFees = normalizeOtherFees(building.other_fees).map(item => ({
+    label: item.label || 'ค่าใช้จ่ายเพิ่มเติม',
+    value: Number(item.amount) || 0,
+    qty: item.note || '1 ครั้ง'
+  }));
+
+  // ค่าใช้จ่ายอาคาร: รวมทุกอย่าง ยกเว้นค่าประกัน (Insurance)
   const buildingFees = [
+    { label: 'ค่าเสียหาย (Damage Deposit)',       value: Number(building.damage_deposit) || 0,  qty: '1 ครั้ง' },
     { label: 'ค่ามัดจำสัญญา (Contract Deposit)', value: Number(building.contract_deposit) || 0, qty: '1 ครั้ง' },
-    { label: 'ค่ากรมธรรม์ (Insurance)',           value: Number(building.insurance_fee) || 0,   qty: '1 ครั้ง' },
     { label: 'ค่าหลัก (Main Fee)',                value: Number(building.main_fee) || 0,        qty: '1 ครั้ง' },
+    { label: 'ค่าบริการรายปี (Annual Fee)',       value: Number(building.annual_fee) || 0,      qty: '1 ครั้ง' },
     { label: 'ค่าประสานงาน (Coordination)',       value: Number(building.coordination_fee) || 0, qty: '1 ครั้ง' },
     { label: `ค่า Shaft (${formatCurrencyNumeric(shaftRatePerFloor)} บ./ชั้น × ${floorDiff} ชั้น)`,
       value: shaftTotal, qty: `${floorDiff} ชั้น`, hidden: shaftRatePerFloor === 0 || floorDiff === 0 },
     { label: `ค่าวางสาย Horizontal ตามระยะสายรวม (${formatCurrencyNumeric(horizontalRatePerMeter)} บ./ม. × ${totalCableDistance} ม.)`,
       value: horizontalTotal, qty: `${totalCableDistance} ม.`, hidden: horizontalRatePerMeter === 0 },
+    ...additionalBuildingFees
   ].filter(f => !f.hidden && f.value > 0);
 
   const buildingFeesTotal = buildingFees.reduce((a, f) => a + f.value, 0);
