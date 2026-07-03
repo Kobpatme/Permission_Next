@@ -2658,7 +2658,7 @@ const layerGroup = (L.markerClusterGroup ? L.markerClusterGroup({
 }) : L.layerGroup()).addTo(map);
 
 function openDrawerById(id) {
-  const r = DATA.find(d => String(d._docId || '') === String(id) || String(d.id) === String(id));
+  const r = findBuildingById(id);
   map.closePopup();
   if (r) window.openDrawer(r);
 }
@@ -2921,6 +2921,23 @@ function normalizeDuplicateValue(value) {
   return String(value || '').trim().toLocaleLowerCase('th-TH').replace(/\s+/g, '');
 }
 
+function collectBuildingIds(record, extraIds = []) {
+  return new Set([
+    record?._docId,
+    record?.id,
+    ...extraIds
+  ].filter(v => v !== null && v !== undefined && v !== '').map(String));
+}
+
+function buildingMatchesId(record, id) {
+  if (id === null || id === undefined || id === '') return false;
+  return collectBuildingIds(record).has(String(id));
+}
+
+function findBuildingById(id) {
+  return DATA.find(item => buildingMatchesId(item, id)) || null;
+}
+
 function setBuildingEditorMessage(message = '') {
   const box = document.getElementById('building-editor-message');
   if (!box) return;
@@ -2984,16 +3001,16 @@ function collectOtherFees() {
     .filter(item => item.label || item.amount !== null || item.note);
 }
 
-function findDuplicateBuilding(payload, existingId) {
+function findDuplicateBuilding(payload, existingRecord, existingId) {
   const nameTh = normalizeDuplicateValue(payload.name_th);
   const nameEng = normalizeDuplicateValue(payload.name_eng);
-  const currentIds = new Set([existingId, payload.id].filter(v => v !== null && v !== undefined && v !== '').map(String));
+  const currentIds = collectBuildingIds(existingRecord, [existingId, payload.id]);
   const hasCoords = Number.isFinite(payload.lat) && Number.isFinite(payload.lng);
   const lat = hasCoords ? payload.lat.toFixed(6) : '';
   const lng = hasCoords ? payload.lng.toFixed(6) : '';
 
   return DATA.find(item => {
-    if (currentIds.has(String(item._docId || '')) || currentIds.has(String(item.id || ''))) return false;
+    if ([...collectBuildingIds(item)].some(id => currentIds.has(id))) return false;
 
     const sameThaiName = nameTh && normalizeDuplicateValue(item.name_th) === nameTh;
     const sameEnglishName = nameEng && normalizeDuplicateValue(item.name_eng) === nameEng;
@@ -3036,7 +3053,7 @@ function openBuildingEditor(record = null) {
 
   form.reset();
   clearBuildingEditorInvalidState(form);
-  form.elements['record_id'].value = record?._docId ?? record?.id ?? '';
+  form.elements['record_id'].value = record?._docId || record?.id || '';
   form.elements['name_th'].value = record?.name_th ?? '';
   form.elements['name_eng'].value = record?.name_eng ?? '';
   form.elements['status'].value = record?.status ?? 'Check Permission';
@@ -3091,7 +3108,7 @@ async function deleteBuildingFromForm(form) {
   const id = form?.elements['record_id']?.value;
   if (!id) return;
 
-  const record = DATA.find(d => String(d._docId || '') === String(id) || String(d.id) === String(id));
+  const record = findBuildingById(id);
   const buildingName = record?.name_th || record?.name_eng || `ID ${id}`;
   const confirmed = confirm(`ต้องการลบข้อมูลอาคาร "${buildingName}" ใช่หรือไม่?`);
   if (!confirmed) return;
@@ -3115,9 +3132,7 @@ async function saveBuildingFromForm(form) {
   }
   const formData = new FormData(form);
   const existingId = formData.get('record_id');
-  const existingRecord = existingId ? DATA.find(item =>
-    String(item._docId || '') === String(existingId) || String(item.id || '') === String(existingId)
-  ) : null;
+  const existingRecord = existingId ? findBuildingById(existingId) : null;
   clearBuildingEditorInvalidState(form);
 
   // รายการใหม่: ใช้ Firestore auto-generated ID เพื่อกันชนกันเวลามีหลายคนเพิ่มข้อมูลพร้อมกัน
@@ -3167,7 +3182,7 @@ async function saveBuildingFromForm(form) {
   }
 
   const duplicate = duplicateSensitiveFieldsChanged(payload, existingRecord)
-    ? findDuplicateBuilding(payload, existingId)
+    ? findDuplicateBuilding(payload, existingRecord, existingId)
     : null;
   if (duplicate) {
     const duplicateName = duplicate.name_th || duplicate.name_eng || `ID ${duplicate.id}`;
