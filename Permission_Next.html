@@ -3268,15 +3268,25 @@ function _updateQuotationDynamicInputs() {
     document.getElementById('quotation-wm-manual').value = '';
   }
 
-  // Horizontal fee hint
+  // Horizontal distance default + fee hint
+  const hwireInputEl = document.getElementById('quotation-hwire');
+  const maxHorizontal = Number(building.max_horizontal) || 0;
+  const hasHorizontalInput = hwireInputEl && String(hwireInputEl.value || '').trim() !== '';
+  if (hwireInputEl && maxHorizontal > 0 && !hasHorizontalInput) {
+    hwireInputEl.value = maxHorizontal;
+  }
+
   const hwireRate = Number(building.horizontal_fee) || 0;
   const hwireRateEl = document.getElementById('quotation-hwire-rate');
-  if (hwireRate > 0) {
-    hwireRateEl.textContent = `อาคารนี้มีค่าวางสาย Horizontal ${formatCurrencyNumeric(hwireRate)} บาท/เมตร`;
-    hwireRateEl.style.color = 'var(--yellow)';
-  } else {
-    hwireRateEl.textContent = '';
+  const hwireHints = [];
+  if (maxHorizontal > 0) {
+    hwireHints.push(`ใช้ Max H-Wire จากข้อมูลอาคาร ${formatCurrencyNumeric(maxHorizontal)} ม. เป็นค่าเริ่มต้น`);
   }
+  if (hwireRate > 0) {
+    hwireHints.push(`อาคารนี้มีค่าวางสาย Horizontal ${formatCurrencyNumeric(hwireRate)} บาท/เมตร`);
+  }
+  hwireRateEl.textContent = hwireHints.join(' | ');
+  hwireRateEl.style.color = hwireHints.length ? 'var(--yellow)' : 'var(--muted)';
 
   // Reset summary/shaft info
   document.getElementById('quotation-distance-summary').style.display = 'none';
@@ -3319,6 +3329,12 @@ function formatCurrency(value) {
 
 function formatCurrencyNumeric(value) {
   return value.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+function formatPermissionDuration(value) {
+  const cleanValue = String(value ?? '').trim();
+  if (!cleanValue) return '';
+  return /วัน$/.test(cleanValue) ? cleanValue : `${cleanValue} วัน`;
 }
 
 function getQuotationExportMessage() {
@@ -3380,14 +3396,14 @@ function calculateQuotation() {
 
   // ===== DISTANCE CALCULATION =====
   const METERS_PER_FLOOR = 5;
-  const floorDiff = Math.abs(custFloor - wmFloor);
-  const verticalDistance = floorDiff * METERS_PER_FLOOR;
+  const verticalFloorCount = Math.abs(custFloor - wmFloor) + 1;
+  const verticalDistance = verticalFloorCount * METERS_PER_FLOOR;
   const totalCableDistance = verticalDistance + hwireInput;
 
   // Show distance summary
   const summaryBox = document.getElementById('quotation-distance-summary');
   document.getElementById('quotation-dist-vertical').innerHTML =
-    `${svgIcon('vertical')} แนวตั้ง: |${custFloor} - ${wmFloor}| × 5 ม. = ${floorDiff} ชั้น × 5 ม. = ${verticalDistance} ม.`;
+    `${svgIcon('vertical')} แนวตั้ง: นับรวมชั้น ${wmFloor} ถึง ${custFloor} = ${verticalFloorCount} ชั้น × 5 ม. = ${verticalDistance} ม.`;
   document.getElementById('quotation-dist-horizontal').innerHTML =
     `${svgIcon('horizontal')} แนวนอน: ${hwireInput} ม.`;
   document.getElementById('quotation-dist-total').innerHTML =
@@ -3406,16 +3422,16 @@ function calculateQuotation() {
   const shaftRatePerFloor = Number(building.shaft_fee_per_floor) || 0;
   const horizontalRatePerMeter = Number(building.horizontal_fee) || 0;
 
-  // shaft uses floor diff (computed automatically)
-  const shaftTotal = shaftRatePerFloor > 0 ? shaftRatePerFloor * floorDiff : 0;
+  // shaft uses the same inclusive floor count as vertical cable distance.
+  const shaftTotal = shaftRatePerFloor > 0 ? shaftRatePerFloor * verticalFloorCount : 0;
   const horizontalTotal = horizontalRatePerMeter > 0 ? horizontalRatePerMeter * totalCableDistance : 0;
 
   // Show shaft info if applicable
   const shaftInfoEl = document.getElementById('quotation-shaft-info');
   const shaftSummaryEl = document.getElementById('quotation-shaft-summary');
-  if (shaftRatePerFloor > 0 && floorDiff > 0) {
+  if (shaftRatePerFloor > 0 && verticalFloorCount > 0) {
     shaftSummaryEl.innerHTML =
-      `${svgIcon('alert')} ค่า Shaft: ${formatCurrencyNumeric(shaftRatePerFloor)} บ./ชั้น × ${floorDiff} ชั้น = ${formatCurrencyNumeric(shaftTotal)} บาท`;
+      `${svgIcon('alert')} ค่า Shaft: ${formatCurrencyNumeric(shaftRatePerFloor)} บ./ชั้น × ${verticalFloorCount} ชั้น = ${formatCurrencyNumeric(shaftTotal)} บาท`;
     shaftInfoEl.style.display = 'block';
   } else {
     shaftInfoEl.style.display = 'none';
@@ -3439,8 +3455,8 @@ function calculateQuotation() {
     { label: FEE_LABELS.mainFee,                  value: Number(building.main_fee) || 0,        qty: '1 ครั้ง' },
     { label: FEE_LABELS.annualFee,                value: Number(building.annual_fee) || 0,      qty: '1 ครั้ง' },
     { label: FEE_LABELS.coordinationFee,          value: Number(building.coordination_fee) || 0, qty: '1 ครั้ง' },
-    { label: `ค่า Shaft (${formatCurrencyNumeric(shaftRatePerFloor)} บ./ชั้น × ${floorDiff} ชั้น)`,
-      value: shaftTotal, qty: `${floorDiff} ชั้น`, hidden: shaftRatePerFloor === 0 || floorDiff === 0 },
+    { label: `ค่า Shaft (${formatCurrencyNumeric(shaftRatePerFloor)} บ./ชั้น × ${verticalFloorCount} ชั้น)`,
+      value: shaftTotal, qty: `${verticalFloorCount} ชั้น`, hidden: shaftRatePerFloor === 0 || verticalFloorCount === 0 },
     { label: `ค่าวางสาย Horizontal ตามระยะสายรวม (${formatCurrencyNumeric(horizontalRatePerMeter)} บ./ม. × ${totalCableDistance} ม.)`,
       value: horizontalTotal, qty: `${totalCableDistance} ม.`, hidden: horizontalRatePerMeter === 0 },
     ...additionalBuildingFees
@@ -3483,8 +3499,12 @@ function calculateQuotation() {
   document.getElementById('quotation-total-cost').textContent = formatCurrency(totalCost);
 
   // ===== UPDATE PREVIEW =====
+  const permissionDurationText = formatPermissionDuration(building.duration);
+  const permissionDurationBlock = document.getElementById('prev-permission-duration-block');
   document.getElementById('prev-customer-name').textContent = customerName;
   document.getElementById('prev-building-name').textContent = building.name_th || building.name_eng || '-';
+  document.getElementById('prev-permission-duration').textContent = permissionDurationText || '-';
+  if (permissionDurationBlock) permissionDurationBlock.style.display = permissionDurationText ? '' : 'none';
   document.getElementById('prev-customer-floor').textContent = `ชั้น ${custFloor}`;
   document.getElementById('prev-distance').textContent = `${totalCableDistance} ม. (แนวตั้ง ${verticalDistance} + แนวนอน ${hwireInput})`;
   document.getElementById('prev-cable-cost').textContent = formatCurrencyNumeric(cableCost) + ' บาท';
@@ -3647,8 +3667,12 @@ function resetQuotationForm(options = {}) {
   resetQuotationExportMessage();
   document.getElementById('quotation-distance-summary').style.display = 'none';
   document.getElementById('quotation-shaft-info').style.display = 'none';
+  const permissionDurationText = formatPermissionDuration(buildingData?.duration);
+  const permissionDurationBlock = document.getElementById('prev-permission-duration-block');
   document.getElementById('prev-customer-name').textContent = '-';
   document.getElementById('prev-building-name').textContent = buildingData?.name_th || buildingData?.name_eng || '-';
+  document.getElementById('prev-permission-duration').textContent = permissionDurationText || '-';
+  if (permissionDurationBlock) permissionDurationBlock.style.display = permissionDurationText ? '' : 'none';
   document.getElementById('prev-customer-floor').textContent = '-';
   document.getElementById('prev-distance').textContent = '-';
   document.getElementById('prev-cable-cost').textContent = '-';
@@ -3939,19 +3963,28 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('quotation-pdf-btn')?.addEventListener('click', generateQuotationPDF);
   document.getElementById('quotation-image-btn')?.addEventListener('click', generateQuotationImage);
   
-  // Enter key navigation: customer → cust-floor → hwire → calculate
+  // Enter key navigation: customer → customer floor → WM floor → hwire → calculate
   const nav = (fromId, toId) => {
     const el = document.getElementById(fromId);
     if (!el) return;
     el.addEventListener('keypress', e => {
       if (e.key !== 'Enter') return;
-      if (toId) document.getElementById(toId)?.focus();
+      if (typeof toId === 'function') toId();
+      else if (toId) document.getElementById(toId)?.focus();
       else calculateQuotation();
     });
   };
+  const focusQuotationWmInput = () => {
+    const wmGroup = document.getElementById('quotation-wm-group');
+    const targetId = wmGroup && wmGroup.style.display !== 'none'
+      ? 'quotation-wm-select'
+      : 'quotation-wm-manual';
+    document.getElementById(targetId)?.focus();
+  };
   nav('quotation-customer', 'quotation-cust-floor');
-  nav('quotation-wm-manual', 'quotation-cust-floor');
-  nav('quotation-cust-floor', 'quotation-hwire');
+  nav('quotation-cust-floor', focusQuotationWmInput);
+  nav('quotation-wm-select', 'quotation-hwire');
+  nav('quotation-wm-manual', 'quotation-hwire');
   nav('quotation-hwire', null);
 });
 </script>
@@ -4030,6 +4063,11 @@ document.addEventListener('DOMContentLoaded', function() {
         <input type="text" id="quotation-customer" placeholder="กรอกชื่อลูกค้า">
       </div>
 
+      <div class="quotation-form-group">
+        <label for="quotation-cust-floor">ชั้นที่ลูกค้าอยู่ *</label>
+        <input type="number" id="quotation-cust-floor" placeholder="เช่น 20" min="0" step="1">
+      </div>
+
       <!-- WM Point selector (มี WM ในอาคาร) -->
       <div id="quotation-wm-group" class="quotation-form-group" style="display:none;">
         <label for="quotation-wm-select">ชั้น WM (จุดเชื่อมต่อ) *</label>
@@ -4042,11 +4080,6 @@ document.addEventListener('DOMContentLoaded', function() {
         <label for="quotation-wm-manual">ชั้น WM (กรอกเอง) *</label>
         <input type="number" id="quotation-wm-manual" placeholder="ชั้นที่มีอุปกรณ์เชื่อมต่อ" min="0" step="1">
         <small style="color:var(--yellow);font-size:11px;margin-top:3px;display:flex;align-items:center;gap:5px;"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17h.01"/></svg> อาคารนี้ไม่มีข้อมูล WM ในระบบ</small>
-      </div>
-
-      <div class="quotation-form-group">
-        <label for="quotation-cust-floor">ชั้นที่ลูกค้าอยู่ *</label>
-        <input type="number" id="quotation-cust-floor" placeholder="เช่น 20" min="0" step="1">
       </div>
 
       <div class="quotation-form-group">
@@ -4131,6 +4164,10 @@ document.addEventListener('DOMContentLoaded', function() {
           <div class="quotation-preview-block">
             <h3>ชื่ออาคาร</h3>
             <p id="prev-building-name">-</p>
+          </div>
+          <div class="quotation-preview-block" id="prev-permission-duration-block" style="display:none;">
+            <h3>ระยะ Permission</h3>
+            <p id="prev-permission-duration">-</p>
           </div>
           <div class="quotation-preview-block">
             <h3>ชั้นลูกค้า</h3>
