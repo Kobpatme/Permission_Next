@@ -525,13 +525,14 @@ body:not(.auth-locked) #auth-screen{display:none;}
 
 /* ====== FILTER BAR ====== */
 #filterbar{
+  position:relative;
   background:color-mix(in oklab, var(--surface) 70%, transparent);
   backdrop-filter:blur(14px);
   -webkit-backdrop-filter:blur(14px);
   border-bottom:1px solid var(--border);
   padding:10px 24px;
   display:flex; gap:8px; align-items:center; flex-wrap:wrap;
-  flex-shrink:0; z-index:100;
+  flex-shrink:0; z-index:9100; overflow:visible;
   transition:padding .22s ease, min-height .22s ease;
 }
 #filterbar.filters-collapsed{padding-top:7px; padding-bottom:7px; min-height:40px;}
