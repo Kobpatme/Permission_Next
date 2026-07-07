@@ -2781,6 +2781,7 @@ function resetUserForm() {
   form.elements['editing_email'].value = '';
   form.elements['password'].required = true;
   setBoxMessage('user-admin-message', '');
+  rememberFormState(form);
 }
 
 function editUser(email) {
@@ -2794,6 +2795,43 @@ function editUser(email) {
   form.elements['password'].value = '';
   form.elements['password'].required = false;
   setBoxMessage('user-admin-message', 'กำลังแก้ไขผู้ใช้: ' + user.email, false);
+  rememberFormState(form);
+}
+
+const UNSAVED_CHANGES_CONFIRM_MESSAGE = 'มีข้อมูลที่ยังไม่ได้บันทึก ต้องการปิดหน้าต่างและทิ้งข้อมูลนี้หรือไม่?';
+
+function serializeFormState(form) {
+  if (!form) return '';
+  const fields = Array.from(form.querySelectorAll('input, select, textarea')).map(el => ({
+    name: el.name || el.id || '',
+    type: el.type || el.tagName,
+    value: el.type === 'checkbox' || el.type === 'radio' ? el.checked : el.value
+  }));
+  return JSON.stringify(fields);
+}
+
+function rememberFormState(form) {
+  if (!form) return;
+  form.dataset.initialState = serializeFormState(form);
+}
+
+function formStateChanged(form) {
+  if (!form) return false;
+  return (form.dataset.initialState || '') !== serializeFormState(form);
+}
+
+function confirmDiscardFormChanges(form) {
+  return !formStateChanged(form) || confirm(UNSAVED_CHANGES_CONFIRM_MESSAGE);
+}
+
+function closeUserAdminModal(force = false) {
+  const modal = document.getElementById('user-admin-modal');
+  const form = document.getElementById('user-admin-form');
+  if (!modal) return true;
+  if (!force && !confirmDiscardFormChanges(form)) return false;
+  modal.classList.remove('open');
+  resetUserForm();
+  return true;
 }
 
 async function deleteUserAccount(email) {
@@ -3832,10 +3870,16 @@ function openBuildingEditor(record = null) {
   document.getElementById('building-editor-title').textContent = record ? 'แก้ไขข้อมูลอาคาร' : 'เพิ่มอาคารใหม่';
   if (deleteBtn) deleteBtn.hidden = !record;
   modal.classList.add('open');
+  rememberFormState(form);
 }
 
-function closeBuildingEditor() {
-  document.getElementById('building-editor-modal')?.classList.remove('open');
+function closeBuildingEditor(options = {}) {
+  const modal = document.getElementById('building-editor-modal');
+  const form = document.getElementById('building-editor-form');
+  if (!modal) return true;
+  if (!options.force && !confirmDiscardFormChanges(form)) return false;
+  modal.classList.remove('open');
+  return true;
 }
 
 function closeDetailDrawerAfterDelete() {
@@ -3861,7 +3905,7 @@ async function deleteBuildingFromForm(form) {
     await window.FSDB.deleteDoc(id);
     // ไม่ต้องแก้ DATA หรือเรียก applyFilters() เอง เพราะ onSnapshot listener
     // จะรับรู้การเปลี่ยนแปลงจาก Firestore และอัปเดตหน้าจอให้อัตโนมัติ (ทุก client)
-    closeBuildingEditor();
+    closeBuildingEditor({ force: true });
     closeDetailDrawerAfterDelete();
   } catch (err) {
     console.error('ลบข้อมูลไม่สำเร็จ:', err);
@@ -3945,7 +3989,7 @@ async function saveBuildingFromForm(form) {
   try {
     await window.FSDB.setDoc(recordId, stripInternalFields(payload));
     // ข้อมูลใน DATA จะถูกอัปเดตอัตโนมัติผ่าน onSnapshot listener
-    closeBuildingEditor();
+    closeBuildingEditor({ force: true });
     openDrawerById(recordId);
   } catch (err) {
     console.error('บันทึกข้อมูลไม่สำเร็จ:', err);
@@ -3992,6 +4036,7 @@ function openQuotationModal() {
   initializeQuotationDate();
   // Refresh dynamic inputs based on currentBuildingData
   _updateQuotationDynamicInputs();
+  rememberQuotationState();
 }
 
 function _updateQuotationDynamicInputs() {
@@ -4053,8 +4098,39 @@ function _updateQuotationDynamicInputs() {
   document.getElementById('quotation-shaft-info').style.display = 'none';
 }
 
-function closeQuotationModal() {
-  document.getElementById('quotation-modal').classList.remove('open');
+const QUOTATION_STATE_IDS = [
+  'quotation-customer',
+  'quotation-cust-floor',
+  'quotation-wm-select',
+  'quotation-wm-manual',
+  'quotation-hwire'
+];
+
+function serializeQuotationState() {
+  return JSON.stringify(QUOTATION_STATE_IDS.map(id => {
+    const el = document.getElementById(id);
+    return [id, el ? el.value : ''];
+  }).concat([['calculated', window._quotationCalculated ? '1' : '0']]));
+}
+
+function rememberQuotationState() {
+  const modal = document.getElementById('quotation-modal');
+  if (!modal) return;
+  modal.dataset.initialState = serializeQuotationState();
+}
+
+function quotationStateChanged() {
+  const modal = document.getElementById('quotation-modal');
+  if (!modal) return false;
+  return (modal.dataset.initialState || '') !== serializeQuotationState();
+}
+
+function closeQuotationModal(options = {}) {
+  const modal = document.getElementById('quotation-modal');
+  if (!modal) return true;
+  if (!options.force && quotationStateChanged() && !confirm(UNSAVED_CHANGES_CONFIRM_MESSAGE)) return false;
+  modal.classList.remove('open');
+  return true;
 }
 
 function quickCalculateQuotation(buildingId) {
@@ -4620,21 +4696,18 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!canManageUsers()) return;
       renderUserAdminList();
       userAdminModal?.classList.add('open');
+      rememberFormState(userAdminForm);
     });
   }
 
   if (userAdminModal) {
     userAdminModal.addEventListener('click', function(e) {
-      if (e.target === userAdminModal) {
-        userAdminModal.classList.remove('open');
-        resetUserForm();
-      }
+      if (e.target === userAdminModal) e.preventDefault();
     });
   }
   if (userAdminCloseBtn) {
     userAdminCloseBtn.addEventListener('click', function() {
-      userAdminModal?.classList.remove('open');
-      resetUserForm();
+      closeUserAdminModal();
     });
   }
   if (userFormResetBtn) {
@@ -4671,7 +4744,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (buildingEditorModal) {
     buildingEditorModal.addEventListener('click', function(e) {
-      if (e.target === buildingEditorModal) closeBuildingEditor();
+      if (e.target === buildingEditorModal) e.preventDefault();
     });
   }
 
@@ -4713,12 +4786,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (quotationModal) {
     quotationModal.addEventListener('click', function(e) {
-      if (e.target === quotationModal) closeQuotationModal();
+      if (e.target === quotationModal) e.preventDefault();
     });
   }
 
   document.getElementById('quotation-calculate-btn')?.addEventListener('click', calculateQuotation);
-  document.getElementById('quotation-reset-btn')?.addEventListener('click', () => resetQuotationForm());
+  document.getElementById('quotation-reset-btn')?.addEventListener('click', () => {
+    if (quotationStateChanged() && !confirm(UNSAVED_CHANGES_CONFIRM_MESSAGE)) return;
+    resetQuotationForm();
+    rememberQuotationState();
+  });
   document.getElementById('quotation-close-btn')?.addEventListener('click', closeQuotationModal);
   document.getElementById('quotation-pdf-btn')?.addEventListener('click', generateQuotationPDF);
   document.getElementById('quotation-image-btn')?.addEventListener('click', generateQuotationImage);
