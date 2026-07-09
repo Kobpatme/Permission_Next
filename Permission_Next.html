@@ -494,7 +494,7 @@ body:not(.auth-locked) #auth-screen{display:none;}
 
 /* THEME / BUILDING BUTTONS */
 #theme-btn, #building-toggle, #add-building-btn,
-#user-manage-btn, #logout-btn{
+#user-manage-btn, #export-csv-btn, #logout-btn{
   min-height:36px;
   background:rgba(15,23,42,.34); border:1px solid var(--border);
   color:var(--text2); border-radius:11px; padding:0 13px;
@@ -504,7 +504,7 @@ body:not(.auth-locked) #auth-screen{display:none;}
   display:flex; align-items:center; justify-content:center; gap:7px;
   font-family:inherit; font-weight:750; letter-spacing:.2px;
 }
-#theme-btn:hover, #building-toggle:hover, #user-manage-btn:hover, #logout-btn:hover{
+#theme-btn:hover, #building-toggle:hover, #user-manage-btn:hover, #export-csv-btn:hover, #logout-btn:hover{
   border-color:var(--accent); color:var(--accent);
   background:var(--accent-soft);
   transform:translateY(-1px);
@@ -1907,6 +1907,7 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 [data-theme="light"] #theme-btn,
 [data-theme="light"] #building-toggle,
 [data-theme="light"] #user-manage-btn,
+[data-theme="light"] #export-csv-btn,
 [data-theme="light"] #logout-btn{
   background:#ffffff !important;
   border:1px solid rgba(15,27,61,.10) !important;
@@ -1921,6 +1922,7 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 [data-theme="light"] #theme-btn:hover,
 [data-theme="light"] #building-toggle:hover,
 [data-theme="light"] #user-manage-btn:hover,
+[data-theme="light"] #export-csv-btn:hover,
 [data-theme="light"] #logout-btn:hover{
   border-color:rgba(37,99,235,.35) !important;
   color:var(--brand-1) !important;
@@ -2278,6 +2280,7 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
     </div>
     <div class="topbar-group topbar-user-actions">
       <button id="user-manage-btn" class="auth-only-admin" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg> ผู้ใช้</button>
+      <button id="export-csv-btn" class="auth-only-admin" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> CSV</button>
       <div class="user-pill" id="current-user-pill" title="ผู้ใช้ปัจจุบัน"><strong>-</strong><span>-</span></div>
       <button id="theme-btn" title="เปลี่ยนธีม"><svg id="theme-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> <span id="theme-label">Light</span></button>
       <button id="logout-btn" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg> ออก</button>
@@ -2486,6 +2489,7 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
     },
     newBatch: () => writeBatch(db),
     setInBatch: (batch, id, data) => batch.set(doc(buildingsCol, String(id)), data),
+    setMergeInBatch: (batch, id, data) => batch.set(doc(buildingsCol, String(id)), data, { merge: true }),
     commitBatch: (batch) => batch.commit(),
     setDoc: (id, data) => setDoc(doc(buildingsCol, String(id)), data, { merge: true }),
     deleteDoc: (id) => deleteDoc(doc(buildingsCol, String(id))),
@@ -2532,6 +2536,66 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 // (ข้อมูลจริงทั้งหมดตอนนี้อยู่ใน Firestore collection 'buildings' เท่านั้น ไม่ได้ฝังอยู่ในไฟล์นี้อีกต่อไป)
 const RAW_DATA = [];
 
+const CHECK_PERMISSION_STALE_DAYS = 365;
+const CHECK_PERMISSION_EXCLUDED_STATUSES = new Set(['Check Permission', 'MOU', 'อาคารปิดถาวร']);
+
+function parseBuildingUpdateDate(value) {
+  if (!value) return null;
+  if (typeof value.toDate === 'function') {
+    const date = value.toDate();
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  const isoDate = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoDate) {
+    const year = Number(isoDate[1]);
+    const month = Number(isoDate[2]);
+    const day = Number(isoDate[3]);
+    const date = new Date(year, month - 1, day);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const slashDate = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (slashDate) {
+    const day = Number(slashDate[1]);
+    const month = Number(slashDate[2]);
+    let year = Number(slashDate[3]);
+    if (year < 100) year += 2000;
+    if (year > 2400) year -= 543;
+    const date = new Date(year, month - 1, day);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isBuildingUpdateStale(updateDate, today = new Date()) {
+  const date = parseBuildingUpdateDate(updateDate);
+  if (!date) return false;
+
+  const staleBefore = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  staleBefore.setDate(staleBefore.getDate() - CHECK_PERMISSION_STALE_DAYS);
+  return date < staleBefore;
+}
+
+function applyAutoCheckPermissionStatus(item) {
+  const currentStatus = String(item.status || '').trim();
+  if (CHECK_PERMISSION_EXCLUDED_STATUSES.has(currentStatus)) return item;
+  if (isBuildingUpdateStale(item.update_date)) item.status = 'Check Permission';
+  return item;
+}
+
+function shouldAutoCheckPermissionStatus(item) {
+  const currentStatus = String(item?.status || '').trim();
+  return !CHECK_PERMISSION_EXCLUDED_STATUSES.has(currentStatus)
+    && isBuildingUpdateStale(item?.update_date);
+}
+
 function normalizeBuildingRecord(r) {
   const item = { ...r };
   let it = (r.install_type||'').toLowerCase().trim();
@@ -2544,6 +2608,7 @@ function normalizeBuildingRecord(r) {
   else if (it === 'port') item.install_type = 'Port';
   let area = (item.area||'').trim().toUpperCase().replace('ฺ','');
   item.area = area;
+  applyAutoCheckPermissionStatus(item);
   item._searchText = `${item.name_th||''} ${item.name_eng||''} ${item.location||''}`.toLowerCase();
   item._nameSearchText = `${item.name_th||''} ${item.name_eng||''}`.toLowerCase();
   return item;
@@ -2578,6 +2643,83 @@ function stripInternalFields(rec) {
   delete clean._nameSearchText;
   delete clean._docId;
   return clean;
+}
+
+const BUILDING_CSV_COLUMNS = [
+  ['id', 'ID'],
+  ['name_th', 'ชื่ออาคาร (ไทย)'],
+  ['name_eng', 'ชื่ออาคาร (อังกฤษ)'],
+  ['status', 'Status'],
+  ['group', 'Group'],
+  ['type', 'Type'],
+  ['install_type', 'Install Type'],
+  ['survey_type', 'Survey Type'],
+  ['area', 'Area'],
+  ['province', 'Province'],
+  ['location', 'Location'],
+  ['lat', 'Latitude'],
+  ['lng', 'Longitude'],
+  ['wm_point', 'WM Point'],
+  ['enclosure', 'Enclosure'],
+  ['max_horizontal', 'Max H-Wire (m.)'],
+  ['damage_deposit', 'เงินประกันติดตั้ง (Deposit)'],
+  ['contract_deposit', 'ค่ามัดจำสัญญา (Contract Deposit)'],
+  ['insurance_fee', 'ค่าประกัน (Insurance)'],
+  ['main_fee', 'ค่าธรรมเนียม (Main Fee)'],
+  ['annual_fee', 'ค่าบริการรายปี (Annual Fee)'],
+  ['coordination_fee', 'ค่าธรรมเนียมประสานงาน (Coordination Fee)'],
+  ['shaft_fee_per_floor', 'ค่า Shaft ต่อชั้น'],
+  ['horizontal_fee', 'ค่าวางสาย Horizontal /ม.'],
+  ['other_fees', 'ค่าใช้จ่ายเพิ่มเติม'],
+  ['duration', 'ระยะ Permission'],
+  ['update_date', 'อัปเดตล่าสุด'],
+  ['address', 'Address'],
+  ['contact', 'Contact'],
+  ['phone', 'Phone'],
+  ['mobile', 'Mobile'],
+  ['email', 'Email'],
+  ['remark', 'Remark']
+];
+
+function csvCell(value) {
+  if (value === null || value === undefined) return '';
+  const text = typeof value === 'object' ? JSON.stringify(value) : String(value);
+  return `"${text.replace(/"/g, '""')}"`;
+}
+
+function makeLocalDateStamp(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function exportBuildingsCsv() {
+  if (!canManageUsers()) {
+    alert('บัญชีนี้ไม่มีสิทธิ์ export ข้อมูล');
+    return;
+  }
+  if (!DATA.length) {
+    alert('ยังไม่มีข้อมูลอาคารสำหรับ export');
+    return;
+  }
+
+  const rows = [
+    BUILDING_CSV_COLUMNS.map(([, label]) => csvCell(label)).join(','),
+    ...DATA.map(record => BUILDING_CSV_COLUMNS
+      .map(([key]) => csvCell(record[key]))
+      .join(','))
+  ];
+  const csv = '\uFEFF' + rows.join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `permission_next_buildings_${makeLocalDateStamp()}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ====== BASIC AUTH / ROLES ======
@@ -2693,6 +2835,7 @@ function applyRoleUi() {
   }
 
   document.getElementById('add-building-btn')?.classList.toggle('role-hidden', !canManageBuildings());
+  document.getElementById('export-csv-btn')?.classList.toggle('role-hidden', !canManageUsers());
   document.querySelectorAll('.edit-building-btn').forEach(btn => {
     btn.classList.toggle('role-hidden', !canManageBuildings());
   });
@@ -2934,22 +3077,45 @@ async function migrateRawDataIfEmpty() {
   return true;
 }
 
+async function persistAutoCheckPermissionStatuses(updates) {
+  const docIds = [...new Set(updates.map(item => item.docId).filter(Boolean).map(String))];
+  if (!docIds.length) return;
+
+  try {
+    const chunkSize = 400;
+    for (let i = 0; i < docIds.length; i += chunkSize) {
+      const batch = window.FSDB.newBatch();
+      docIds.slice(i, i + chunkSize).forEach(docId => {
+        window.FSDB.setMergeInBatch(batch, docId, { status: 'Check Permission' });
+      });
+      await window.FSDB.commitBatch(batch);
+    }
+    setSyncStatus(`อัปเดตสถานะ Check Permission อัตโนมัติ ${docIds.length} รายการ`);
+  } catch (err) {
+    console.error('Auto Check Permission update failed:', err);
+    setSyncStatus('อัปเดตสถานะ Check Permission อัตโนมัติไม่สำเร็จ: ' + err.message, true);
+  }
+}
+
 // ------ ซิงค์ข้อมูลแบบ real-time: ทุกครั้งที่มีคนแก้ไข/เพิ่ม/ลบ ทุก client จะเห็นทันที ------
 function startRealtimeSync() {
   if (firestoreUnsub) firestoreUnsub();
   firestoreUnsub = window.FSDB.onSnapshot(
     snapshot => {
+      const autoCheckUpdates = [];
       DATA = snapshot.docs
         .map(docSnap => {
           const raw = docSnap.data();
           if (raw._kind === 'permission_next_auth') return null;
           raw._docId = docSnap.id;
           if (raw.id === undefined || raw.id === null || raw.id === '') raw.id = docSnap.id;
+          if (shouldAutoCheckPermissionStatus(raw)) autoCheckUpdates.push({ docId: docSnap.id });
           return normalizeBuildingRecord(raw);
         })
         .filter(Boolean);
       setSyncStatus('ซิงค์ล่าสุด ' + new Date().toLocaleTimeString('th-TH'));
       applyFilters();
+      persistAutoCheckPermissionStatuses(autoCheckUpdates);
     },
     err => {
       console.error('Firestore sync error:', err);
@@ -4525,6 +4691,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const loginForm = document.getElementById('login-form');
   const logoutBtn = document.getElementById('logout-btn');
   const userManageBtn = document.getElementById('user-manage-btn');
+  const exportCsvBtn = document.getElementById('export-csv-btn');
   const userAdminModal = document.getElementById('user-admin-modal');
   const userAdminCloseBtn = document.getElementById('user-admin-close-btn');
   const userAdminForm = document.getElementById('user-admin-form');
@@ -4698,6 +4865,10 @@ document.addEventListener('DOMContentLoaded', function() {
       userAdminModal?.classList.add('open');
       rememberFormState(userAdminForm);
     });
+  }
+
+  if (exportCsvBtn) {
+    exportCsvBtn.addEventListener('click', exportBuildingsCsv);
   }
 
   if (userAdminModal) {
