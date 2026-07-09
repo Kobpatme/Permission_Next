@@ -2574,6 +2574,14 @@ function parseBuildingUpdateDate(value) {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function formatBuildingUpdateDate(value) {
+  const date = parseBuildingUpdateDate(value);
+  if (!date) return value || '—';
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${day}/${month}/${date.getFullYear()}`;
+}
+
 function isBuildingUpdateStale(updateDate, today = new Date()) {
   const date = parseBuildingUpdateDate(updateDate);
   if (!date) return false;
@@ -3480,7 +3488,7 @@ function openDrawer(r) {
       <div class="info-cell"><label>จังหวัด</label><p>${esc(r.province||'—')}</p></div>
       <div class="info-cell"><label>ทำเล / โซน</label><p>${esc(r.location||'—')}</p></div>
       <div class="info-cell"><label>ระยะ Permission</label><p>${r.duration ? esc(r.duration)+' วัน' : '—'}</p></div>
-      <div class="info-cell"><label>อัปเดตล่าสุด</label><p>${esc(r.update_date||'—')}</p></div>
+      <div class="info-cell"><label>อัปเดตล่าสุด</label><p>${esc(formatBuildingUpdateDate(r.update_date))}</p></div>
       <div class="info-cell"><label>WM Point</label><p>${esc(r.wm_point||'—')}</p></div>
       <div class="info-cell"><label>Enclosure</label><p>${esc(r.enclosure||'—')}</p></div>
       <div class="info-cell"><label>Max H-Wire (ม.)</label><p>${esc(r.max_horizontal||'—')}</p></div>
