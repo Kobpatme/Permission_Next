@@ -3530,22 +3530,13 @@ function openDrawer(r) {
   `;
 
   // Tab: Fee
-  const standardFeeRows = [
-    [FEE_LABELS.damageDeposit, r.damage_deposit],
-    [FEE_LABELS.contractDeposit, r.contract_deposit],
-    [FEE_LABELS.insurance, r.insurance_fee],
-    [FEE_LABELS.mainFee, r.main_fee],
-    [FEE_LABELS.annualFee, r.annual_fee],
-    [FEE_LABELS.coordinationFee, r.coordination_fee],
-    ['ค่า Shaft ต่อชั้น', r.shaft_fee_per_floor],
-    ['ค่าวางสาย Horizontal /ม.', r.horizontal_fee],
-  ].filter(([,v]) => v !== null && v !== undefined && v !== 0 && v !== '');
-  const otherFeeRows = normalizeOtherFees(r.other_fees).map(item => [
-    item.label || 'ค่าใช้จ่ายเพิ่มเติม',
-    item.amount,
-    item.note
-  ]);
-  const feeRows = [...standardFeeRows, ...otherFeeRows];
+  const feeRows = getBuildingBoqFees(r)
+    .filter(item => item.amount !== 0)
+    .map(item => [
+      item.label,
+      item.amount,
+      item.unit !== 'ครั้ง' ? item.unit : ''
+    ]);
 
   const totalFee = feeRows.reduce((sum,[,v]) => sum + (Number(v)||0), 0);
 
@@ -3978,7 +3969,17 @@ const BUILDING_BOQ_FEE_FIELDS = [
   { field: 'horizontal_fee', label: 'ค่าวางสาย Horizontal /ม.', payable: true, unit: 'เมตร', category: 'variable_fee' }
 ];
 
-function buildBuildingBoqProfile(record) {
+function buildBuildingBoqProfile(record, existingProfile = null) {
+  const managedFeeSources = new Set([
+    ...BUILDING_BOQ_FEE_FIELDS.map(item => item.field),
+    'other_fees'
+  ]);
+  const externalFees = (Array.isArray(existingProfile?.fees) ? existingProfile.fees : [])
+    .map((item, index) => {
+      const normalized = normalizeBuildingBoqFee(item, index);
+      return normalized ? { ...item, ...normalized } : null;
+    })
+    .filter(item => item && !managedFeeSources.has(item.source_field || item.key));
   const fees = BUILDING_BOQ_FEE_FIELDS
     .map(item => ({
       key: item.field,
@@ -4002,8 +4003,10 @@ function buildBuildingBoqProfile(record) {
       category: 'other_fee'
     });
   });
+  fees.push(...externalFees);
 
   return {
+    ...(existingProfile && typeof existingProfile === 'object' ? existingProfile : {}),
     building_id: record?.id ?? record?._docId ?? '',
     building_name_th: record?.name_th || '',
     building_name_eng: record?.name_eng || '',
@@ -4021,6 +4024,63 @@ function buildBuildingBoqProfile(record) {
   };
 }
 
+function hasStoredBuildingBoqProfile(record) {
+  return Boolean(record?.boq_profile && Array.isArray(record.boq_profile.fees));
+}
+
+function normalizeBuildingBoqFee(item, index = 0) {
+  const amount = toNullableNumber(item?.amount);
+  if (amount === null) return null;
+  return {
+    key: String(item?.key || item?.source_field || `fee_${index + 1}`),
+    source_field: String(item?.source_field || item?.key || ''),
+    label: String(item?.label || 'ค่าใช้จ่ายอาคาร').trim(),
+    amount,
+    unit: String(item?.unit || 'ครั้ง').trim(),
+    payable: item?.payable !== false,
+    category: String(item?.category || 'building_fee').trim()
+  };
+}
+
+function getBuildingBoqProfile(record) {
+  return hasStoredBuildingBoqProfile(record)
+    ? record.boq_profile
+    : buildBuildingBoqProfile(record || {});
+}
+
+function getBuildingBoqFees(record) {
+  return (getBuildingBoqProfile(record).fees || [])
+    .map(normalizeBuildingBoqFee)
+    .filter(Boolean);
+}
+
+function getBuildingBoqFee(record, key) {
+  const cleanKey = String(key || '');
+  return getBuildingBoqFees(record).find(item =>
+    item.key === cleanKey || item.source_field === cleanKey
+  ) || null;
+}
+
+function getBuildingBoqFeeAmount(record, key) {
+  return getBuildingBoqFee(record, key)?.amount ?? null;
+}
+
+function getBuildingBoqOtherFees(record) {
+  if (!hasStoredBuildingBoqProfile(record)) return normalizeOtherFees(record?.other_fees);
+  return getBuildingBoqFees(record)
+    .filter(item => item.category === 'other_fee' || item.source_field === 'other_fees')
+    .map(item => ({
+      label: item.label,
+      amount: item.amount,
+      note: item.unit === 'ครั้ง' ? '' : item.unit
+    }));
+}
+
+function formatBuildingBoqFeeQuantity(fee) {
+  if (!fee?.unit || fee.unit === 'ครั้ง') return '1 ครั้ง';
+  return fee.category === 'other_fee' ? fee.unit : `1 ${fee.unit}`;
+}
+
 async function syncBuildingBoqProfiles({ skipConfirm = false, silent = false } = {}) {
   if (!canManageUsers()) {
     alert('บัญชีนี้ไม่มีสิทธิ์สร้าง BOQ database');
@@ -4035,8 +4095,14 @@ async function syncBuildingBoqProfiles({ skipConfirm = false, silent = false } =
     return;
   }
 
+  const recordsWithoutBoq = DATA.filter(record => !hasStoredBuildingBoqProfile(record));
+  if (!recordsWithoutBoq.length) {
+    if (!silent) alert(`ข้อมูล BOQ ครบแล้ว ${DATA.length} อาคาร`);
+    return;
+  }
+
   if (!skipConfirm) {
-    const confirmed = confirm(`ต้องการสร้าง/อัปเดตข้อมูล BOQ กลับเข้า document อาคาร ${DATA.length} รายการใช่หรือไม่?`);
+    const confirmed = confirm(`ต้องการสร้างข้อมูล BOQ สำหรับอาคารที่ยังไม่มี ${recordsWithoutBoq.length} รายการใช่หรือไม่?`);
     if (!confirmed) return;
   }
 
@@ -4048,7 +4114,7 @@ async function syncBuildingBoqProfiles({ skipConfirm = false, silent = false } =
   }
 
   try {
-    const profiles = DATA
+    const profiles = recordsWithoutBoq
       .map(record => ({
         docId: String(record?._docId || record?.id || '').trim(),
         boqProfile: buildBuildingBoqProfile(record)
@@ -4065,7 +4131,7 @@ async function syncBuildingBoqProfiles({ skipConfirm = false, silent = false } =
       });
       await window.FSDB.commitBatch(batch);
     }
-    if (!silent) alert(`สร้าง/อัปเดตข้อมูล BOQ กลับเข้า database อาคารสำเร็จ ${profiles.length} รายการ`);
+    if (!silent) alert(`สร้างข้อมูล BOQ สำหรับอาคารที่ยังไม่มีสำเร็จ ${profiles.length} รายการ`);
   } catch (err) {
     console.error('Sync BOQ database failed:', err);
     if (silent) setSyncStatus('สร้าง BOQ database ไม่สำเร็จ: ' + err.message, true);
@@ -4152,15 +4218,15 @@ function openBuildingEditor(record = null) {
   form.elements['wm_point'].value = record?.wm_point ?? 'No';
   form.elements['enclosure'].value = record?.enclosure ?? 'No';
   form.elements['max_horizontal'].value = record?.max_horizontal ?? '';
-  form.elements['damage_deposit'].value = record?.damage_deposit ?? '';
-  form.elements['contract_deposit'].value = record?.contract_deposit ?? '';
-  form.elements['insurance_fee'].value = record?.insurance_fee ?? '';
-  form.elements['main_fee'].value = record?.main_fee ?? '';
-  form.elements['annual_fee'].value = record?.annual_fee ?? '';
-  form.elements['coordination_fee'].value = record?.coordination_fee ?? '';
-  form.elements['shaft_fee_per_floor'].value = record?.shaft_fee_per_floor ?? '';
-  form.elements['horizontal_fee'].value = record?.horizontal_fee ?? '';
-  renderOtherFeeRows(record?.other_fees || []);
+  form.elements['damage_deposit'].value = getBuildingBoqFeeAmount(record, 'damage_deposit') ?? '';
+  form.elements['contract_deposit'].value = getBuildingBoqFeeAmount(record, 'contract_deposit') ?? '';
+  form.elements['insurance_fee'].value = getBuildingBoqFeeAmount(record, 'insurance_fee') ?? '';
+  form.elements['main_fee'].value = getBuildingBoqFeeAmount(record, 'main_fee') ?? '';
+  form.elements['annual_fee'].value = getBuildingBoqFeeAmount(record, 'annual_fee') ?? '';
+  form.elements['coordination_fee'].value = getBuildingBoqFeeAmount(record, 'coordination_fee') ?? '';
+  form.elements['shaft_fee_per_floor'].value = getBuildingBoqFeeAmount(record, 'shaft_fee_per_floor') ?? '';
+  form.elements['horizontal_fee'].value = getBuildingBoqFeeAmount(record, 'horizontal_fee') ?? '';
+  renderOtherFeeRows(getBuildingBoqOtherFees(record));
 
   document.getElementById('building-editor-title').textContent = record ? 'แก้ไขข้อมูลอาคาร' : 'เพิ่มอาคารใหม่';
   if (deleteBtn) deleteBtn.hidden = !record;
@@ -4282,7 +4348,12 @@ async function saveBuildingFromForm(form) {
   }
 
   try {
-    await window.FSDB.setDoc(recordId, stripInternalFields(payload));
+    const boqProfile = buildBuildingBoqProfile(payload, existingRecord?.boq_profile);
+    await window.FSDB.setDoc(recordId, stripInternalFields({
+      ...payload,
+      boq_profile: boqProfile,
+      boq_updated_at: boqProfile.synced_at
+    }));
     // ข้อมูลใน DATA จะถูกอัปเดตอัตโนมัติผ่าน onSnapshot listener
     closeBuildingEditor({ force: true });
     openDrawerById(recordId);
@@ -4376,7 +4447,7 @@ function _updateQuotationDynamicInputs() {
     hwireInputEl.value = maxHorizontal;
   }
 
-  const hwireRate = Number(building.horizontal_fee) || 0;
+  const hwireRate = Number(getBuildingBoqFeeAmount(building, 'horizontal_fee')) || 0;
   const hwireRateEl = document.getElementById('quotation-hwire-rate');
   const hwireHints = [];
   if (maxHorizontal > 0) {
@@ -4550,8 +4621,9 @@ function calculateQuotation() {
   const cableCost = totalCableDistance * CABLE_RATE;
 
   // Building fees
-  const shaftRatePerFloor = Number(building.shaft_fee_per_floor) || 0;
-  const horizontalRatePerMeter = Number(building.horizontal_fee) || 0;
+  const boqFees = getBuildingBoqFees(building);
+  const shaftRatePerFloor = Number(getBuildingBoqFeeAmount(building, 'shaft_fee_per_floor')) || 0;
+  const horizontalRatePerMeter = Number(getBuildingBoqFeeAmount(building, 'horizontal_fee')) || 0;
 
   // shaft uses the same inclusive floor count as vertical cable distance.
   const shaftTotal = shaftRatePerFloor > 0 ? shaftRatePerFloor * verticalFloorCount : 0;
@@ -4568,29 +4640,28 @@ function calculateQuotation() {
     shaftInfoEl.style.display = 'none';
   }
 
-  const additionalBuildingFees = normalizeOtherFees(building.other_fees).map(item => ({
-    label: item.label || 'ค่าใช้จ่ายเพิ่มเติม',
-    value: Number(item.amount) || 0,
-    qty: item.note || '1 ครั้ง'
-  }));
+  const fixedPayableFees = boqFees
+    .filter(item => item.payable && item.category !== 'variable_fee')
+    .map(item => ({
+      label: item.label,
+      value: item.amount,
+      qty: formatBuildingBoqFeeQuantity(item)
+    }));
+  const nonPayableFees = boqFees
+    .filter(item => !item.payable && item.amount > 0)
+    .map(item => ({
+      label: item.label,
+      value: item.amount,
+      qty: formatBuildingBoqFeeQuantity(item)
+    }));
 
-  // ค่าใช้จ่ายอาคาร: รวมเฉพาะรายการที่ลูกค้าต้องชำระ ยกเว้นค่าประกัน (Insurance) และเงินประกันติดตั้ง (Deposit)
-  const depositFee = {
-    label: FEE_LABELS.damageDeposit,
-    value: Number(building.damage_deposit) || 0,
-    qty: '1 ครั้ง'
-  };
-  const nonPayableFees = depositFee.value > 0 ? [depositFee] : [];
+  // ค่าใช้จ่ายประเภท variable_fee จะคำนวณตามจำนวนชั้นและระยะสาย ส่วนรายการอื่นใช้ยอดจาก BOQ โดยตรง
   const buildingFees = [
-    { label: FEE_LABELS.contractDeposit,          value: Number(building.contract_deposit) || 0, qty: '1 ครั้ง' },
-    { label: FEE_LABELS.mainFee,                  value: Number(building.main_fee) || 0,        qty: '1 ครั้ง' },
-    { label: FEE_LABELS.annualFee,                value: Number(building.annual_fee) || 0,      qty: '1 ครั้ง' },
-    { label: FEE_LABELS.coordinationFee,          value: Number(building.coordination_fee) || 0, qty: '1 ครั้ง' },
+    ...fixedPayableFees,
     { label: `ค่า Shaft (${formatCurrencyNumeric(shaftRatePerFloor)} บ./ชั้น × ${verticalFloorCount} ชั้น)`,
       value: shaftTotal, qty: `${verticalFloorCount} ชั้น`, hidden: shaftRatePerFloor === 0 || verticalFloorCount === 0 },
     { label: `ค่าวางสาย Horizontal ตามระยะสายรวม (${formatCurrencyNumeric(horizontalRatePerMeter)} บ./ม. × ${totalCableDistance} ม.)`,
-      value: horizontalTotal, qty: `${totalCableDistance} ม.`, hidden: horizontalRatePerMeter === 0 },
-    ...additionalBuildingFees
+      value: horizontalTotal, qty: `${totalCableDistance} ม.`, hidden: horizontalRatePerMeter === 0 }
   ].filter(f => !f.hidden && f.value > 0);
 
   const buildingFeesTotal = buildingFees.reduce((a, f) => a + f.value, 0);
