@@ -494,7 +494,7 @@ body:not(.auth-locked) #auth-screen{display:none;}
 
 /* THEME / BUILDING BUTTONS */
 #theme-btn, #building-toggle, #add-building-btn,
-#user-manage-btn, #export-csv-btn, #logout-btn{
+#user-manage-btn, #export-csv-btn, #sync-boq-db-btn, #logout-btn{
   min-height:36px;
   background:rgba(15,23,42,.34); border:1px solid var(--border);
   color:var(--text2); border-radius:11px; padding:0 13px;
@@ -504,7 +504,7 @@ body:not(.auth-locked) #auth-screen{display:none;}
   display:flex; align-items:center; justify-content:center; gap:7px;
   font-family:inherit; font-weight:750; letter-spacing:.2px;
 }
-#theme-btn:hover, #building-toggle:hover, #user-manage-btn:hover, #export-csv-btn:hover, #logout-btn:hover{
+#theme-btn:hover, #building-toggle:hover, #user-manage-btn:hover, #export-csv-btn:hover, #sync-boq-db-btn:hover, #logout-btn:hover{
   border-color:var(--accent); color:var(--accent);
   background:var(--accent-soft);
   transform:translateY(-1px);
@@ -1908,6 +1908,7 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 [data-theme="light"] #building-toggle,
 [data-theme="light"] #user-manage-btn,
 [data-theme="light"] #export-csv-btn,
+[data-theme="light"] #sync-boq-db-btn,
 [data-theme="light"] #logout-btn{
   background:#ffffff !important;
   border:1px solid rgba(15,27,61,.10) !important;
@@ -1923,6 +1924,7 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 [data-theme="light"] #building-toggle:hover,
 [data-theme="light"] #user-manage-btn:hover,
 [data-theme="light"] #export-csv-btn:hover,
+[data-theme="light"] #sync-boq-db-btn:hover,
 [data-theme="light"] #logout-btn:hover{
   border-color:rgba(37,99,235,.35) !important;
   color:var(--brand-1) !important;
@@ -2281,6 +2283,7 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
     <div class="topbar-group topbar-user-actions">
       <button id="user-manage-btn" class="auth-only-admin" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg> ผู้ใช้</button>
       <button id="export-csv-btn" class="auth-only-admin" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> CSV</button>
+      <button id="sync-boq-db-btn" class="auth-only-admin" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4z"/><path d="M9 4v16"/><path d="M4 9h16"/><path d="M4 14h16"/></svg> BOQ DB</button>
       <div class="user-pill" id="current-user-pill" title="ผู้ใช้ปัจจุบัน"><strong>-</strong><span>-</span></div>
       <button id="theme-btn" title="เปลี่ยนธีม"><svg id="theme-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> <span id="theme-label">Light</span></button>
       <button id="logout-btn" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg> ออก</button>
@@ -2844,6 +2847,7 @@ function applyRoleUi() {
 
   document.getElementById('add-building-btn')?.classList.toggle('role-hidden', !canManageBuildings());
   document.getElementById('export-csv-btn')?.classList.toggle('role-hidden', !canManageUsers());
+  document.getElementById('sync-boq-db-btn')?.classList.toggle('role-hidden', !canManageUsers());
   document.querySelectorAll('.edit-building-btn').forEach(btn => {
     btn.classList.toggle('role-hidden', !canManageBuildings());
   });
@@ -3121,7 +3125,13 @@ function startRealtimeSync() {
           return normalizeBuildingRecord(raw);
         })
         .filter(Boolean);
-      setSyncStatus('ซิงค์ล่าสุด ' + new Date().toLocaleTimeString('th-TH'));
+      const boqProfileCount = DATA.filter(item => item.boq_profile && typeof item.boq_profile === 'object').length;
+      const syncStatus = document.getElementById('sync-status');
+      if (syncStatus) {
+        syncStatus.dataset.buildingCount = String(DATA.length);
+        syncStatus.dataset.boqProfileCount = String(boqProfileCount);
+      }
+      setSyncStatus(`ซิงค์ล่าสุด ${new Date().toLocaleTimeString('th-TH')} • BOQ ${boqProfileCount}/${DATA.length}`);
       applyFilters();
       persistAutoCheckPermissionStatuses(autoCheckUpdates);
     },
@@ -3957,6 +3967,117 @@ function collectOtherFees() {
     .filter(item => item.label || item.amount !== null || item.note);
 }
 
+const BUILDING_BOQ_FEE_FIELDS = [
+  { field: 'damage_deposit', label: FEE_LABELS.damageDeposit, payable: false, unit: 'ครั้ง', category: 'deposit' },
+  { field: 'contract_deposit', label: FEE_LABELS.contractDeposit, payable: true, unit: 'ครั้ง', category: 'building_fee' },
+  { field: 'insurance_fee', label: FEE_LABELS.insurance, payable: false, unit: 'ครั้ง', category: 'insurance' },
+  { field: 'main_fee', label: FEE_LABELS.mainFee, payable: true, unit: 'ครั้ง', category: 'building_fee' },
+  { field: 'annual_fee', label: FEE_LABELS.annualFee, payable: true, unit: 'ครั้ง', category: 'building_fee' },
+  { field: 'coordination_fee', label: FEE_LABELS.coordinationFee, payable: true, unit: 'ครั้ง', category: 'building_fee' },
+  { field: 'shaft_fee_per_floor', label: 'ค่า Shaft ต่อชั้น', payable: true, unit: 'ชั้น', category: 'variable_fee' },
+  { field: 'horizontal_fee', label: 'ค่าวางสาย Horizontal /ม.', payable: true, unit: 'เมตร', category: 'variable_fee' }
+];
+
+function buildBuildingBoqProfile(record) {
+  const fees = BUILDING_BOQ_FEE_FIELDS
+    .map(item => ({
+      key: item.field,
+      source_field: item.field,
+      label: item.label,
+      amount: toNullableNumber(record?.[item.field]),
+      unit: item.unit,
+      payable: item.payable,
+      category: item.category
+    }))
+    .filter(item => item.amount !== null);
+
+  normalizeOtherFees(record?.other_fees).forEach((item, index) => {
+    fees.push({
+      key: `other_fee_${index + 1}`,
+      source_field: 'other_fees',
+      label: item.label || 'ค่าใช้จ่ายเพิ่มเติม',
+      amount: item.amount,
+      unit: item.note || 'ครั้ง',
+      payable: true,
+      category: 'other_fee'
+    });
+  });
+
+  return {
+    building_id: record?.id ?? record?._docId ?? '',
+    building_name_th: record?.name_th || '',
+    building_name_eng: record?.name_eng || '',
+    status: record?.status || '',
+    group: record?.group || '',
+    type: record?.type || '',
+    install_type: record?.install_type || '',
+    area: record?.area || '',
+    province: record?.province || '',
+    update_date: record?.update_date || null,
+    fees,
+    payable_total: fees.filter(item => item.payable).reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
+    non_payable_total: fees.filter(item => !item.payable).reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
+    synced_at: new Date().toISOString()
+  };
+}
+
+async function syncBuildingBoqProfiles({ skipConfirm = false, silent = false } = {}) {
+  if (!canManageUsers()) {
+    alert('บัญชีนี้ไม่มีสิทธิ์สร้าง BOQ database');
+    return;
+  }
+  if (!DATA.length) {
+    alert('ยังไม่มีข้อมูลอาคารสำหรับสร้าง BOQ database');
+    return;
+  }
+  if (!window.FSDB?.setMergeInBatch) {
+    alert('Firestore ยังไม่พร้อมสำหรับ BOQ database');
+    return;
+  }
+
+  if (!skipConfirm) {
+    const confirmed = confirm(`ต้องการสร้าง/อัปเดตข้อมูล BOQ กลับเข้า document อาคาร ${DATA.length} รายการใช่หรือไม่?`);
+    if (!confirmed) return;
+  }
+
+  const btn = document.getElementById('sync-boq-db-btn');
+  const originalHtml = btn?.innerHTML || '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = 'กำลัง sync...';
+  }
+
+  try {
+    const profiles = DATA
+      .map(record => ({
+        docId: String(record?._docId || record?.id || '').trim(),
+        boqProfile: buildBuildingBoqProfile(record)
+      }))
+      .filter(item => item.docId);
+    const chunkSize = 400;
+    for (let i = 0; i < profiles.length; i += chunkSize) {
+      const batch = window.FSDB.newBatch();
+      profiles.slice(i, i + chunkSize).forEach(item => {
+        window.FSDB.setMergeInBatch(batch, item.docId, {
+          boq_profile: item.boqProfile,
+          boq_updated_at: item.boqProfile.synced_at
+        });
+      });
+      await window.FSDB.commitBatch(batch);
+    }
+    if (!silent) alert(`สร้าง/อัปเดตข้อมูล BOQ กลับเข้า database อาคารสำเร็จ ${profiles.length} รายการ`);
+  } catch (err) {
+    console.error('Sync BOQ database failed:', err);
+    if (silent) setSyncStatus('สร้าง BOQ database ไม่สำเร็จ: ' + err.message, true);
+    else alert('สร้าง BOQ database ไม่สำเร็จ: ' + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml || 'BOQ DB';
+    }
+  }
+}
+
 function findDuplicateBuilding(payload, existingRecord, existingId) {
   const nameTh = normalizeDuplicateValue(payload.name_th);
   const nameEng = normalizeDuplicateValue(payload.name_eng);
@@ -4700,6 +4821,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const logoutBtn = document.getElementById('logout-btn');
   const userManageBtn = document.getElementById('user-manage-btn');
   const exportCsvBtn = document.getElementById('export-csv-btn');
+  const syncBoqDbBtn = document.getElementById('sync-boq-db-btn');
   const userAdminModal = document.getElementById('user-admin-modal');
   const userAdminCloseBtn = document.getElementById('user-admin-close-btn');
   const userAdminForm = document.getElementById('user-admin-form');
@@ -4877,6 +4999,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (exportCsvBtn) {
     exportCsvBtn.addEventListener('click', exportBuildingsCsv);
+  }
+
+  if (syncBoqDbBtn) {
+    syncBoqDbBtn.addEventListener('click', event => syncBuildingBoqProfiles({
+      skipConfirm: event.shiftKey,
+      silent: event.shiftKey
+    }));
   }
 
   if (userAdminModal) {
