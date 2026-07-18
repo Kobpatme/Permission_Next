@@ -1469,6 +1469,14 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 .quotation-calc-row{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:14px; margin:8px 0; font-size:13px;}
 .quotation-calc-label{color:var(--text2); font-weight:500;}
 .quotation-calc-value{color:var(--text); font-weight:700; font-variant-numeric:tabular-nums;}
+.quotation-cost-breakdown{margin-top:14px; padding-top:12px; border-top:1px solid var(--border2);}
+.quotation-cost-breakdown > div,
+#prev-cost-breakdown > div{display:flex; justify-content:space-between; gap:16px; margin:7px 0; font-size:12px;}
+.quotation-cost-breakdown strong,
+#prev-cost-breakdown strong{font-variant-numeric:tabular-nums;}
+.quotation-cost-breakdown .excluded{color:var(--muted);}
+#prev-cost-breakdown{margin-bottom:12px; color:#334155;}
+#prev-cost-breakdown .excluded{color:#64748b;}
 .quotation-total-row{
   display:flex; justify-content:space-between;
   margin:14px 0 0 0; padding-top:14px;
@@ -3126,12 +3134,16 @@ function startRealtimeSync() {
         })
         .filter(Boolean);
       const boqProfileCount = DATA.filter(item => item.boq_profile && typeof item.boq_profile === 'object').length;
+      const costClassifiedCount = DATA.filter(item =>
+        Number(item.boq_profile?.cost_classification_version) >= 1
+      ).length;
       const syncStatus = document.getElementById('sync-status');
       if (syncStatus) {
         syncStatus.dataset.buildingCount = String(DATA.length);
         syncStatus.dataset.boqProfileCount = String(boqProfileCount);
+        syncStatus.dataset.costClassifiedCount = String(costClassifiedCount);
       }
-      setSyncStatus(`ซิงค์ล่าสุด ${new Date().toLocaleTimeString('th-TH')} • BOQ ${boqProfileCount}/${DATA.length}`);
+      setSyncStatus(`ซิงค์ล่าสุด ${new Date().toLocaleTimeString('th-TH')} • BOQ ${boqProfileCount}/${DATA.length} • Cost ${costClassifiedCount}/${DATA.length}`);
       applyFilters();
       persistAutoCheckPermissionStatuses(autoCheckUpdates);
     },
@@ -3535,7 +3547,7 @@ function openDrawer(r) {
     .map(item => [
       item.label,
       item.amount,
-      item.unit !== 'ครั้ง' ? item.unit : ''
+      [item.cost_type, item.unit !== 'ครั้ง' ? item.unit : ''].filter(Boolean).join(' • ')
     ]);
 
   const totalFee = feeRows.reduce((sum,[,v]) => sum + (Number(v)||0), 0);
@@ -3959,15 +3971,55 @@ function collectOtherFees() {
 }
 
 const BUILDING_BOQ_FEE_FIELDS = [
-  { field: 'damage_deposit', label: FEE_LABELS.damageDeposit, payable: false, unit: 'ครั้ง', category: 'deposit' },
-  { field: 'contract_deposit', label: FEE_LABELS.contractDeposit, payable: true, unit: 'ครั้ง', category: 'building_fee' },
-  { field: 'insurance_fee', label: FEE_LABELS.insurance, payable: false, unit: 'ครั้ง', category: 'insurance' },
-  { field: 'main_fee', label: FEE_LABELS.mainFee, payable: true, unit: 'ครั้ง', category: 'building_fee' },
-  { field: 'annual_fee', label: FEE_LABELS.annualFee, payable: true, unit: 'ครั้ง', category: 'building_fee' },
-  { field: 'coordination_fee', label: FEE_LABELS.coordinationFee, payable: true, unit: 'ครั้ง', category: 'building_fee' },
-  { field: 'shaft_fee_per_floor', label: 'ค่า Shaft ต่อชั้น', payable: true, unit: 'ชั้น', category: 'variable_fee' },
-  { field: 'horizontal_fee', label: 'ค่าวางสาย Horizontal /ม.', payable: true, unit: 'เมตร', category: 'variable_fee' }
+  { field: 'damage_deposit', label: FEE_LABELS.damageDeposit, payable: false, unit: 'ครั้ง', category: 'deposit', cost_type: 'DEPOSIT' },
+  { field: 'contract_deposit', label: FEE_LABELS.contractDeposit, payable: true, unit: 'ครั้ง', category: 'deposit', cost_type: 'DEPOSIT' },
+  { field: 'insurance_fee', label: FEE_LABELS.insurance, payable: false, unit: 'ครั้ง', category: 'insurance', cost_type: 'OPEX' },
+  { field: 'main_fee', label: FEE_LABELS.mainFee, payable: true, unit: 'ครั้ง', category: 'building_fee', cost_type: 'CAPEX' },
+  { field: 'annual_fee', label: FEE_LABELS.annualFee, payable: true, unit: 'ครั้ง', category: 'building_fee', cost_type: 'OPEX' },
+  { field: 'coordination_fee', label: FEE_LABELS.coordinationFee, payable: true, unit: 'ครั้ง', category: 'building_fee', cost_type: 'CAPEX' },
+  { field: 'shaft_fee_per_floor', label: 'ค่า Shaft ต่อชั้น', payable: true, unit: 'ชั้น', category: 'variable_fee', cost_type: 'CAPEX' },
+  { field: 'horizontal_fee', label: 'ค่าวางสาย Horizontal /ม.', payable: true, unit: 'เมตร', category: 'variable_fee', cost_type: 'CAPEX' }
 ];
+
+const BOQ_COST_TYPES = new Set(['CAPEX', 'OPEX', 'DEPOSIT', 'UNCLASSIFIED']);
+
+function resolveBuildingBoqCostType(item) {
+  const explicit = String(item?.cost_type || '').trim().toUpperCase();
+  if (BOQ_COST_TYPES.has(explicit)) return explicit;
+  const key = String(item?.source_field || item?.key || '').trim();
+  const category = String(item?.category || '').trim();
+  if (category === 'deposit' || ['damage_deposit', 'contract_deposit'].includes(key)) return 'DEPOSIT';
+  if (category === 'insurance' || key === 'annual_fee' || key === 'insurance_fee') return 'OPEX';
+  if (category === 'other_fee') return 'UNCLASSIFIED';
+  if (category === 'building_fee' || category === 'variable_fee') return 'CAPEX';
+  return 'UNCLASSIFIED';
+}
+
+function applyBuildingBoqCostClassification(profile, classifiedAt = new Date().toISOString()) {
+  const fees = (Array.isArray(profile?.fees) ? profile.fees : [])
+    .map((item, index) => {
+      const normalized = normalizeBuildingBoqFee(item, index);
+      return normalized ? { ...item, ...normalized } : null;
+    })
+    .filter(Boolean);
+  const fixedFees = fees.filter(item => item.category !== 'variable_fee');
+  const totalByType = costType => fixedFees
+    .filter(item => item.cost_type === costType)
+    .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  return {
+    ...(profile && typeof profile === 'object' ? profile : {}),
+    fees,
+    payable_total: fixedFees.filter(item => item.payable).reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
+    non_payable_total: fixedFees.filter(item => !item.payable).reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
+    capex_total: totalByType('CAPEX'),
+    opex_total: totalByType('OPEX'),
+    deposit_total: totalByType('DEPOSIT'),
+    unclassified_total: totalByType('UNCLASSIFIED'),
+    variable_rate_count: fees.length - fixedFees.length,
+    cost_classification_version: 1,
+    cost_classified_at: classifiedAt
+  };
+}
 
 function buildBuildingBoqProfile(record, existingProfile = null) {
   const managedFeeSources = new Set([
@@ -3988,7 +4040,8 @@ function buildBuildingBoqProfile(record, existingProfile = null) {
       amount: toNullableNumber(record?.[item.field]),
       unit: item.unit,
       payable: item.payable,
-      category: item.category
+      category: item.category,
+      cost_type: item.cost_type
     }))
     .filter(item => item.amount !== null);
 
@@ -4000,12 +4053,13 @@ function buildBuildingBoqProfile(record, existingProfile = null) {
       amount: item.amount,
       unit: item.note || 'ครั้ง',
       payable: true,
-      category: 'other_fee'
+      category: 'other_fee',
+      cost_type: 'UNCLASSIFIED'
     });
   });
   fees.push(...externalFees);
 
-  return {
+  return applyBuildingBoqCostClassification({
     ...(existingProfile && typeof existingProfile === 'object' ? existingProfile : {}),
     building_id: record?.id ?? record?._docId ?? '',
     building_name_th: record?.name_th || '',
@@ -4018,10 +4072,8 @@ function buildBuildingBoqProfile(record, existingProfile = null) {
     province: record?.province || '',
     update_date: record?.update_date || null,
     fees,
-    payable_total: fees.filter(item => item.payable).reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
-    non_payable_total: fees.filter(item => !item.payable).reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
     synced_at: new Date().toISOString()
-  };
+  });
 }
 
 function hasStoredBuildingBoqProfile(record) {
@@ -4038,7 +4090,8 @@ function normalizeBuildingBoqFee(item, index = 0) {
     amount,
     unit: String(item?.unit || 'ครั้ง').trim(),
     payable: item?.payable !== false,
-    category: String(item?.category || 'building_fee').trim()
+    category: String(item?.category || 'building_fee').trim(),
+    cost_type: resolveBuildingBoqCostType(item)
   };
 }
 
@@ -4081,7 +4134,7 @@ function formatBuildingBoqFeeQuantity(fee) {
   return fee.category === 'other_fee' ? fee.unit : `1 ${fee.unit}`;
 }
 
-async function syncBuildingBoqProfiles({ skipConfirm = false, silent = false } = {}) {
+async function syncBuildingBoqProfiles({ skipConfirm = false, silent = false, refreshCostTypes = false } = {}) {
   if (!canManageUsers()) {
     alert('บัญชีนี้ไม่มีสิทธิ์สร้าง BOQ database');
     return;
@@ -4096,13 +4149,15 @@ async function syncBuildingBoqProfiles({ skipConfirm = false, silent = false } =
   }
 
   const recordsWithoutBoq = DATA.filter(record => !hasStoredBuildingBoqProfile(record));
-  if (!recordsWithoutBoq.length) {
+  const targetRecords = refreshCostTypes ? DATA : recordsWithoutBoq;
+  if (!targetRecords.length) {
     if (!silent) alert(`ข้อมูล BOQ ครบแล้ว ${DATA.length} อาคาร`);
     return;
   }
 
   if (!skipConfirm) {
-    const confirmed = confirm(`ต้องการสร้างข้อมูล BOQ สำหรับอาคารที่ยังไม่มี ${recordsWithoutBoq.length} รายการใช่หรือไม่?`);
+    const actionText = refreshCostTypes ? 'จัดหมวด CAPEX/OPEX' : 'สร้างข้อมูล BOQ สำหรับอาคารที่ยังไม่มี';
+    const confirmed = confirm(`ต้องการ${actionText} ${targetRecords.length} รายการใช่หรือไม่?`);
     if (!confirmed) return;
   }
 
@@ -4114,11 +4169,17 @@ async function syncBuildingBoqProfiles({ skipConfirm = false, silent = false } =
   }
 
   try {
-    const profiles = recordsWithoutBoq
-      .map(record => ({
-        docId: String(record?._docId || record?.id || '').trim(),
-        boqProfile: buildBuildingBoqProfile(record)
-      }))
+    const profiles = targetRecords
+      .map(record => {
+        const boqProfile = hasStoredBuildingBoqProfile(record)
+          ? applyBuildingBoqCostClassification(record.boq_profile)
+          : buildBuildingBoqProfile(record);
+        return {
+          docId: String(record?._docId || record?.id || '').trim(),
+          boqProfile,
+          updatedAt: boqProfile.cost_classified_at || boqProfile.synced_at
+        };
+      })
       .filter(item => item.docId);
     const chunkSize = 400;
     for (let i = 0; i < profiles.length; i += chunkSize) {
@@ -4126,12 +4187,15 @@ async function syncBuildingBoqProfiles({ skipConfirm = false, silent = false } =
       profiles.slice(i, i + chunkSize).forEach(item => {
         window.FSDB.setMergeInBatch(batch, item.docId, {
           boq_profile: item.boqProfile,
-          boq_updated_at: item.boqProfile.synced_at
+          boq_updated_at: item.updatedAt
         });
       });
       await window.FSDB.commitBatch(batch);
     }
-    if (!silent) alert(`สร้างข้อมูล BOQ สำหรับอาคารที่ยังไม่มีสำเร็จ ${profiles.length} รายการ`);
+    if (!silent) {
+      const resultText = refreshCostTypes ? 'จัดหมวด CAPEX/OPEX สำเร็จ' : 'สร้างข้อมูล BOQ สำหรับอาคารที่ยังไม่มีสำเร็จ';
+      alert(`${resultText} ${profiles.length} รายการ`);
+    }
   } catch (err) {
     console.error('Sync BOQ database failed:', err);
     if (silent) setSyncStatus('สร้าง BOQ database ไม่สำเร็จ: ' + err.message, true);
@@ -4645,28 +4709,54 @@ function calculateQuotation() {
     .map(item => ({
       label: item.label,
       value: item.amount,
-      qty: formatBuildingBoqFeeQuantity(item)
+      qty: formatBuildingBoqFeeQuantity(item),
+      cost_type: item.cost_type
     }));
   const nonPayableFees = boqFees
     .filter(item => !item.payable && item.amount > 0)
     .map(item => ({
       label: item.label,
       value: item.amount,
-      qty: formatBuildingBoqFeeQuantity(item)
+      qty: formatBuildingBoqFeeQuantity(item),
+      cost_type: item.cost_type
     }));
+
+  const shaftFee = getBuildingBoqFee(building, 'shaft_fee_per_floor');
+  const horizontalFee = getBuildingBoqFee(building, 'horizontal_fee');
 
   // ค่าใช้จ่ายประเภท variable_fee จะคำนวณตามจำนวนชั้นและระยะสาย ส่วนรายการอื่นใช้ยอดจาก BOQ โดยตรง
   const buildingFees = [
     ...fixedPayableFees,
     { label: `ค่า Shaft (${formatCurrencyNumeric(shaftRatePerFloor)} บ./ชั้น × ${verticalFloorCount} ชั้น)`,
-      value: shaftTotal, qty: `${verticalFloorCount} ชั้น`, hidden: shaftRatePerFloor === 0 || verticalFloorCount === 0 },
+      value: shaftTotal, qty: `${verticalFloorCount} ชั้น`, cost_type: shaftFee?.cost_type || 'CAPEX', hidden: shaftRatePerFloor === 0 || verticalFloorCount === 0 },
     { label: `ค่าวางสาย Horizontal ตามระยะสายรวม (${formatCurrencyNumeric(horizontalRatePerMeter)} บ./ม. × ${totalCableDistance} ม.)`,
-      value: horizontalTotal, qty: `${totalCableDistance} ม.`, hidden: horizontalRatePerMeter === 0 }
+      value: horizontalTotal, qty: `${totalCableDistance} ม.`, cost_type: horizontalFee?.cost_type || 'CAPEX', hidden: horizontalRatePerMeter === 0 }
   ].filter(f => !f.hidden && f.value > 0);
 
-  const buildingFeesTotal = buildingFees.reduce((a, f) => a + f.value, 0);
   const installationSubtotal = cableCost + EQUIPMENT_COST + ODF_COST + SPLICE_COST;
-  const totalCost = installationSubtotal + buildingFeesTotal;
+  const costTypeLabels = {
+    CAPEX: 'CAPEX',
+    OPEX: 'OPEX',
+    DEPOSIT: 'Deposit ที่ต้องชำระ',
+    UNCLASSIFIED: 'ยังไม่จัดประเภท'
+  };
+  const payableGroups = ['CAPEX', 'OPEX', 'DEPOSIT', 'UNCLASSIFIED']
+    .map(costType => ({
+      costType,
+      label: costTypeLabels[costType],
+      items: buildingFees.filter(item => item.cost_type === costType)
+    }))
+    .map(group => ({
+      ...group,
+      total: group.items.reduce((sum, item) => sum + item.value, 0)
+    }));
+  const buildingCapexTotal = payableGroups.find(group => group.costType === 'CAPEX')?.total || 0;
+  const capexTotal = installationSubtotal + buildingCapexTotal;
+  const opexTotal = payableGroups.find(group => group.costType === 'OPEX')?.total || 0;
+  const depositPayableTotal = payableGroups.find(group => group.costType === 'DEPOSIT')?.total || 0;
+  const unclassifiedPayableTotal = payableGroups.find(group => group.costType === 'UNCLASSIFIED')?.total || 0;
+  const nonPayableTotal = nonPayableFees.reduce((sum, item) => sum + item.value, 0);
+  const totalCost = capexTotal + opexTotal + depositPayableTotal + unclassifiedPayableTotal;
 
   // ===== UPDATE FORM DISPLAY =====
   document.getElementById('quotation-cable-cost').textContent = formatCurrency(cableCost);
@@ -4676,27 +4766,35 @@ function calculateQuotation() {
   document.getElementById('quotation-installation-subtotal').textContent = formatCurrency(installationSubtotal);
 
   const buildingFeesContainer = document.getElementById('quotation-building-fees');
-  const buildingFeesHtml = buildingFeesTotal > 0 ? `
+  const buildingFeesHtml = payableGroups.filter(group => group.total > 0).map(group => `
       <div class="quotation-calc-section">
-        <span>ค่าธรรมเนียมอาคาร</span>
-        <span>${formatCurrency(buildingFeesTotal)}</span>
+        <span>${esc(group.label)}</span>
+        <span>${formatCurrency(group.total)}</span>
       </div>
-      ${buildingFees.map(f => `
+      ${group.items.map(f => `
         <div class="quotation-calc-row">
           <span class="quotation-calc-label">${esc(f.label)}</span>
           <span class="quotation-calc-value">${formatCurrency(f.value)}</span>
-        </div>`).join('')}` : '';
+        </div>`).join('')}`).join('');
   const nonPayableFeesHtml = nonPayableFees.length ? `
       <div class="quotation-calc-section">
-        <span>รายการเงินประกันการติดตั้ง</span>
-        <span>ไม่นำไปรวม</span>
+        <span>Deposit / รายการไม่รวม</span>
+        <span>${formatCurrency(nonPayableTotal)} • ไม่นำไปรวม</span>
       </div>
       ${nonPayableFees.map(f => `
         <div class="quotation-calc-row">
           <span class="quotation-calc-label">${esc(f.label)}</span>
           <span class="quotation-calc-value">${formatCurrency(f.value)}</span>
         </div>`).join('')}` : '';
-  buildingFeesContainer.innerHTML = buildingFeesHtml + nonPayableFeesHtml;
+  const costBreakdownHtml = `
+      <div class="quotation-cost-breakdown">
+        <div><span>CAPEX รวม</span><strong>${formatCurrency(capexTotal)}</strong></div>
+        <div><span>OPEX รวม</span><strong>${formatCurrency(opexTotal)}</strong></div>
+        ${depositPayableTotal > 0 ? `<div><span>Deposit ที่ต้องชำระ</span><strong>${formatCurrency(depositPayableTotal)}</strong></div>` : ''}
+        ${unclassifiedPayableTotal > 0 ? `<div><span>ยังไม่จัดประเภท</span><strong>${formatCurrency(unclassifiedPayableTotal)}</strong></div>` : ''}
+        ${nonPayableTotal > 0 ? `<div class="excluded"><span>รายการไม่นำไปรวม</span><strong>${formatCurrency(nonPayableTotal)}</strong></div>` : ''}
+      </div>`;
+  buildingFeesContainer.innerHTML = buildingFeesHtml + nonPayableFeesHtml + costBreakdownHtml;
 
   document.getElementById('quotation-total-cost').textContent = formatCurrency(totalCost);
 
@@ -4713,35 +4811,48 @@ function calculateQuotation() {
   document.getElementById('prev-installation-subtotal').textContent = formatCurrencyNumeric(installationSubtotal) + ' บาท';
 
   const prevBuildingFeesContainer = document.getElementById('prev-building-fees-table');
-  const buildingFeesPreviewHtml = buildingFeesTotal > 0 ? `
-      <tr class="quotation-section-row">
-        <td colspan="4">ค่าธรรมเนียมอาคาร</td>
-      </tr>
-      ${buildingFees.map((f, index) => `
+  let previewItemIndex = 5;
+  const buildingFeesPreviewHtml = payableGroups.filter(group => group.total > 0).map(group => {
+    const rows = group.items.map(fee => `
         <tr>
-          <td>${index + 5}</td>
+          <td>${previewItemIndex++}</td>
+          <td>${esc(fee.label)}</td>
+          <td>${esc(fee.qty)}</td>
+          <td class="quotation-amount">${formatCurrencyNumeric(fee.value)} บาท</td>
+        </tr>`).join('');
+    return `
+      <tr class="quotation-section-row">
+        <td colspan="4">${esc(group.label)}</td>
+      </tr>
+      ${rows}
+      <tr class="quotation-subtotal-row">
+        <td colspan="3">รวม ${esc(group.label)}</td>
+        <td class="quotation-amount">${formatCurrencyNumeric(group.total)} บาท</td>
+      </tr>`;
+  }).join('');
+  const nonPayableFeesPreviewHtml = nonPayableFees.length ? `
+      <tr class="quotation-section-row">
+        <td colspan="4">Deposit / รายการไม่รวมยอด</td>
+      </tr>
+      ${nonPayableFees.map(f => `
+        <tr>
+          <td>${previewItemIndex++}</td>
           <td>${esc(f.label)}</td>
           <td>${esc(f.qty)}</td>
           <td class="quotation-amount">${formatCurrencyNumeric(f.value)} บาท</td>
         </tr>`).join('')}
       <tr class="quotation-subtotal-row">
-        <td colspan="3">รวมค่าธรรมเนียมอาคาร</td>
-        <td class="quotation-amount">${formatCurrencyNumeric(buildingFeesTotal)} บาท</td>
+        <td colspan="3">รวมรายการไม่นำมาคำนวณ</td>
+        <td class="quotation-amount">${formatCurrencyNumeric(nonPayableTotal)} บาท</td>
       </tr>` : '';
-  const nonPayableStartIndex = 5 + buildingFees.length;
-  const nonPayableFeesPreviewHtml = nonPayableFees.length ? `
-      <tr class="quotation-section-row">
-        <td colspan="4">รายการเงินประกันการติดตั้ง</td>
-      </tr>
-      ${nonPayableFees.map((f, index) => `
-        <tr>
-          <td>${nonPayableStartIndex + index}</td>
-          <td>${esc(f.label)}</td>
-          <td>${esc(f.qty)}</td>
-          <td class="quotation-amount">${formatCurrencyNumeric(f.value)} บาท</td>
-        </tr>`).join('')}` : '';
   prevBuildingFeesContainer.innerHTML = buildingFeesPreviewHtml + nonPayableFeesPreviewHtml;
 
+  document.getElementById('prev-cost-breakdown').innerHTML = `
+    <div><span>CAPEX รวม</span><strong>${formatCurrencyNumeric(capexTotal)} บาท</strong></div>
+    <div><span>OPEX รวม</span><strong>${formatCurrencyNumeric(opexTotal)} บาท</strong></div>
+    ${depositPayableTotal > 0 ? `<div><span>Deposit ที่ต้องชำระ</span><strong>${formatCurrencyNumeric(depositPayableTotal)} บาท</strong></div>` : ''}
+    ${unclassifiedPayableTotal > 0 ? `<div><span>ยังไม่จัดประเภท</span><strong>${formatCurrencyNumeric(unclassifiedPayableTotal)} บาท</strong></div>` : ''}
+    ${nonPayableTotal > 0 ? `<div class="excluded"><span>รายการไม่นำมาคำนวณ</span><strong>${formatCurrencyNumeric(nonPayableTotal)} บาท</strong></div>` : ''}`;
   document.getElementById('prev-total').textContent = formatCurrencyNumeric(totalCost) + ' บาท';
 
   window._quotationCalculated = true;
@@ -4880,6 +4991,7 @@ function resetQuotationForm(options = {}) {
   document.getElementById('prev-cable-cost').textContent = '-';
   document.getElementById('prev-installation-subtotal').textContent = '2,800.00 บาท';
   document.getElementById('prev-building-fees-table').innerHTML = '';
+  document.getElementById('prev-cost-breakdown').innerHTML = '';
   document.getElementById('prev-total').textContent = '-';
   window._quotationCalculated = false;
   window.currentBuildingData = buildingData || {};
@@ -5075,7 +5187,8 @@ document.addEventListener('DOMContentLoaded', function() {
   if (syncBoqDbBtn) {
     syncBoqDbBtn.addEventListener('click', event => syncBuildingBoqProfiles({
       skipConfirm: event.shiftKey,
-      silent: event.shiftKey
+      silent: event.shiftKey,
+      refreshCostTypes: event.shiftKey
     }));
   }
 
@@ -5319,7 +5432,7 @@ document.addEventListener('DOMContentLoaded', function() {
       
       <div class="quotation-calc-display">
         <div class="quotation-calc-section">
-          <span>ต้นทุนติดตั้ง</span>
+          <span>ต้นทุนติดตั้ง (CAPEX)</span>
           <span id="quotation-installation-subtotal">2,800 บาท</span>
         </div>
         <div class="quotation-calc-row">
@@ -5345,7 +5458,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div id="quotation-building-fees"></div>
         
         <div class="quotation-total-row">
-          <span class="quotation-total-label">รวมทั้งสิ้น</span>
+          <span class="quotation-total-label">ยอดรวมที่ต้องชำระ</span>
           <span class="quotation-total-value" id="quotation-total-cost">2,800 บาท</span>
         </div>
       </div>
@@ -5402,7 +5515,7 @@ document.addEventListener('DOMContentLoaded', function() {
           </thead>
           <tbody>
             <tr class="quotation-section-row">
-              <td colspan="4">ต้นทุนติดตั้ง</td>
+              <td colspan="4">ต้นทุนติดตั้ง (CAPEX)</td>
             </tr>
             <tr>
               <td>1</td>
@@ -5437,8 +5550,9 @@ document.addEventListener('DOMContentLoaded', function() {
         </table>
         
         <div class="quotation-preview-summary">
+          <div id="prev-cost-breakdown"></div>
           <div class="quotation-summary-total">
-            <span>รวมทั้งสิ้น</span>
+            <span>ยอดรวมที่ต้องชำระ</span>
             <span id="prev-total">-</span>
           </div>
         </div>
