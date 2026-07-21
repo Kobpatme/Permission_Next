@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
@@ -1536,10 +1537,12 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 /* Quotation Preview (kept neutral for print) */
 #quotation-preview{
   background:#fff; color:#222; padding:24px; border-radius:10px;
-  font-family:'Inter','Arial',sans-serif; font-size:12px;
+  font-family:'Noto Sans Thai',Tahoma,'Leelawadee UI',Arial,sans-serif; font-size:12px;
+  line-height:1.5; font-kerning:normal; font-variant-ligatures:normal;
   min-height:500px;
   box-shadow:0 8px 28px rgba(0,0,0,.18);
 }
+#quotation-preview *{letter-spacing:normal !important;}
 .quotation-preview-header{text-align:center; border-bottom:2px solid #0f172a; padding-bottom:16px; margin-bottom:22px;}
 .quotation-preview-title{font-size:20px; font-weight:800; margin-bottom:4px; letter-spacing:-.3px;}
 .quotation-preview-subtitle{font-size:10px; color:#999;}
@@ -1553,6 +1556,11 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 .quotation-preview-table thead{background:linear-gradient(135deg,#2563eb,#4f46e5); color:#fff;}
 .quotation-preview-table th{padding:10px; text-align:left; font-weight:700; letter-spacing:.3px;}
 .quotation-preview-table td{padding:9px 10px; border-bottom:1px solid #e5e7eb;}
+.quotation-preview-table tr,
+.quotation-preview-info,
+.quotation-preview-summary{
+  break-inside:avoid; page-break-inside:avoid;
+}
 .quotation-preview-table tbody tr:nth-child(even){background:#f8fafc;}
 .quotation-preview-table .quotation-section-row td{
   background:#eef2ff; color:#1e40af; font-weight:800;
@@ -4571,6 +4579,11 @@ function openQuotationModal() {
   rememberQuotationState();
 }
 
+function parseWmFloors(value) {
+  const matches = String(value ?? '').match(/\d+/g) || [];
+  return [...new Set(matches.map(item => String(Number(item))).filter(item => Number(item) >= 0))];
+}
+
 function _updateQuotationDynamicInputs() {
   const building = window.currentBuildingData || {};
   const buildingName = building.name_th || building.name_eng || '';
@@ -4587,22 +4600,30 @@ function _updateQuotationDynamicInputs() {
 
   // Parse wm_point field
   const wmRaw = String(building.wm_point || '').trim();
-  const hasWM = wmRaw && wmRaw.toLowerCase() !== 'no' && wmRaw !== '' && wmRaw !== 'null';
+  const wmFloors = parseWmFloors(wmRaw);
+  const hasSelectableWmFloor = wmFloors.length > 0;
 
   const wmSelectGroup = document.getElementById('quotation-wm-group');
   const wmManualGroup = document.getElementById('quotation-wm-manual-group');
   const wmSelect = document.getElementById('quotation-wm-select');
 
-  if (hasWM) {
-    // Parse comma-separated WM floors e.g. "15, 25"
-    const wmFloors = wmRaw.split(/[,،、]/).map(s => s.trim()).filter(s => /^\d+$/.test(s));
+  if (hasSelectableWmFloor) {
+    // Supports values such as "15, 25" and "ชั้น 15 / ชั้น 25".
     wmSelect.innerHTML = wmFloors.map(f => `<option value="${f}">ชั้น ${f}</option>`).join('');
     wmSelectGroup.style.display = 'block';
     wmManualGroup.style.display = 'none';
   } else {
+    wmSelect.innerHTML = '';
     wmSelectGroup.style.display = 'none';
     wmManualGroup.style.display = 'block';
     document.getElementById('quotation-wm-manual').value = '';
+    const manualHint = document.getElementById('quotation-wm-manual-hint');
+    const statesWmExists = wmRaw && !['no', 'null'].includes(wmRaw.toLowerCase());
+    if (manualHint) {
+      manualHint.lastChild.textContent = statesWmExists
+        ? ' อาคารนี้ระบุว่ามี WM แต่ยังไม่มีข้อมูลเลขชั้น กรุณากรอกเอง'
+        : ' อาคารนี้ไม่มีข้อมูลชั้น WM ในระบบ';
+    }
   }
 
   // Horizontal distance default + fee hint
@@ -4778,10 +4799,10 @@ function calculateQuotation() {
     return;
   }
 
-  const wmRaw = String(building.wm_point || '').trim();
-  const hasWM = wmRaw && wmRaw.toLowerCase() !== 'no' && wmRaw !== '' && wmRaw !== 'null';
+  const wmFloors = parseWmFloors(building.wm_point);
+  const hasSelectableWmFloor = wmFloors.length > 0;
   let wmFloor;
-  if (hasWM) {
+  if (hasSelectableWmFloor) {
     wmFloor = parseInt(document.getElementById('quotation-wm-select').value);
   } else {
     wmFloor = parseInt(document.getElementById('quotation-wm-manual').value);
@@ -5067,9 +5088,30 @@ function calculateQuotation() {
 }
 
 // Generate PDF
+async function waitForQuotationFonts() {
+  if (document.fonts?.load) {
+    try {
+      await Promise.race([
+        Promise.all([
+          document.fonts.load('400 12px "Noto Sans Thai"'),
+          document.fonts.load('700 12px "Noto Sans Thai"'),
+          document.fonts.load('800 20px "Noto Sans Thai"'),
+          document.fonts.ready
+        ]),
+        new Promise(resolve => setTimeout(resolve, 4000))
+      ]);
+    } catch (err) {
+      console.warn('โหลดฟอนต์ไทยสำหรับ PDF ไม่ครบ จะใช้ฟอนต์สำรอง:', err);
+    }
+  }
+  // Allow layout to settle after the font metrics change before html2canvas captures it.
+  await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
+
 async function generateQuotationPDF() {
   const customerName = document.getElementById('quotation-customer').value.trim();
   const msgEl = getQuotationExportMessage();
+  const pdfBtn = document.getElementById('quotation-pdf-btn');
 
   if (!window._quotationCalculated || !customerName) {
     msgEl.className = 'error';
@@ -5094,19 +5136,46 @@ async function generateQuotationPDF() {
   
   const element = document.getElementById('quotation-preview');
   const options = {
-    margin: 10,
+    margin: [8, 8, 8, 8],
     filename: `quotation_${customerName}_${new Date().getTime()}.pdf`,
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2 },
-    jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
+    image: { type: 'png', quality: 1 },
+    pagebreak: {
+      mode: ['css', 'legacy'],
+      avoid: ['tr', '.quotation-preview-info', '.quotation-preview-summary']
+    },
+    html2canvas: {
+      scale: 2,
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: '#ffffff',
+      logging: false,
+      scrollX: 0,
+      scrollY: 0,
+      windowWidth: element.scrollWidth
+    },
+    jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4', compress: true }
   };
-  
-  html2pdf().set(options).from(element).save();
-  
-  msgEl.className = 'success';
-  msgEl.innerHTML = iconText('check', 'PDF ดาวน์โหลดสำเร็จ');
-  msgEl.style.display = 'block';
-  setTimeout(() => msgEl.style.display = 'none', 3000);
+
+  try {
+    if (pdfBtn) pdfBtn.disabled = true;
+    msgEl.className = '';
+    msgEl.textContent = 'กำลังจัดรูปแบบและสร้างไฟล์ PDF...';
+    msgEl.style.display = 'block';
+    await waitForQuotationFonts();
+    await html2pdf().set(options).from(element).save();
+
+    msgEl.className = 'success';
+    msgEl.innerHTML = iconText('check', 'PDF ดาวน์โหลดสำเร็จ');
+    msgEl.style.display = 'block';
+    setTimeout(() => msgEl.style.display = 'none', 3000);
+  } catch (err) {
+    console.error('สร้าง PDF ไม่สำเร็จ:', err);
+    msgEl.className = 'error';
+    msgEl.innerHTML = iconText('x', 'สร้างไฟล์ PDF ไม่สำเร็จ กรุณาลองใหม่');
+    msgEl.style.display = 'block';
+  } finally {
+    if (pdfBtn) pdfBtn.disabled = false;
+  }
 }
 
 // Generate Image
@@ -5137,9 +5206,11 @@ async function generateQuotationImage() {
   }
   
   const element = document.getElementById('quotation-preview');
+  await waitForQuotationFonts();
   
   html2canvas(element, {
     scale: 2,
+    useCORS: true,
     backgroundColor: '#ffffff',
     logging: false
   }).then(canvas => {
@@ -5620,7 +5691,7 @@ document.addEventListener('DOMContentLoaded', function() {
       <div id="quotation-wm-manual-group" class="quotation-form-group" style="display:none;">
         <label for="quotation-wm-manual">ชั้น WM (กรอกเอง) *</label>
         <input type="number" id="quotation-wm-manual" placeholder="ชั้นที่มีอุปกรณ์เชื่อมต่อ" min="0" step="1">
-        <small style="color:var(--yellow);font-size:11px;margin-top:3px;display:flex;align-items:center;gap:5px;"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17h.01"/></svg> อาคารนี้ไม่มีข้อมูล WM ในระบบ</small>
+        <small id="quotation-wm-manual-hint" style="color:var(--yellow);font-size:11px;margin-top:3px;display:flex;align-items:center;gap:5px;"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5"/><path d="M12 17h.01"/></svg> อาคารนี้ไม่มีข้อมูลชั้น WM ในระบบ</small>
       </div>
 
       <div class="quotation-form-group">
@@ -5884,7 +5955,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="building-field"><label>Location</label><input name="location" type="text"></div>
         <div class="building-field"><label>Latitude</label><input name="lat" type="number" step="any"></div>
         <div class="building-field"><label>Longitude</label><input name="lng" type="number" step="any"></div>
-        <div class="building-field"><label>WM Point</label><select name="wm_point"><option>No</option><option>Yes</option></select></div>
+        <div class="building-field"><label>WM Point / ชั้น WM</label><input name="wm_point" type="text" placeholder="เช่น 15, 25 หรือ No"><small>กรอกเลขชั้นคั่นด้วยจุลภาค หากมีหลายจุด</small></div>
         <div class="building-field"><label>Enclosure</label><select name="enclosure"><option>No</option><option>Yes</option></select></div>
         <div class="building-field"><label>Max H-Wire (ม.)</label><input name="max_horizontal" type="number" step="0.01" min="0"></div>
         <div class="building-editor-section">ค่าธรรมเนียม</div>
