@@ -1295,10 +1295,11 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 .other-fees-list{display:flex; flex-direction:column; gap:10px;}
 .other-fee-row{
   display:grid;
-  grid-template-columns:minmax(0,1.35fr) minmax(120px,.7fr) minmax(0,1fr) auto;
+  grid-template-columns:minmax(0,1.25fr) minmax(135px,.75fr) minmax(120px,.65fr) minmax(130px,.7fr) minmax(0,1fr) auto;
   gap:10px;
   align-items:end;
 }
+.other-fee-period[hidden]{display:none;}
 .other-fee-remove{
   border:1px solid color-mix(in oklab, var(--red) 40%, transparent);
   background:var(--red-bg);
@@ -1453,6 +1454,13 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
   background:var(--surface2);
   box-shadow:0 0 0 3px var(--accent-soft);
 }
+.quotation-revenue-panel{
+  display:none; margin:4px 0 16px; padding:14px;
+  border:1px solid color-mix(in oklab, var(--accent) 28%, transparent);
+  border-radius:10px; background:var(--grad-accent-soft);
+}
+.quotation-revenue-panel-title{font-size:12px; font-weight:800; color:var(--accent); margin-bottom:10px;}
+.quotation-revenue-panel .quotation-form-group:last-child{margin-bottom:0;}
 
 .quotation-calc-display{
   background:var(--grad-accent-soft);
@@ -1471,11 +1479,14 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 .quotation-calc-value{color:var(--text); font-weight:700; font-variant-numeric:tabular-nums;}
 .quotation-cost-breakdown{margin-top:14px; padding-top:12px; border-top:1px solid var(--border2);}
 .quotation-cost-breakdown > div,
-#prev-cost-breakdown > div{display:flex; justify-content:space-between; gap:16px; margin:7px 0; font-size:12px;}
+#prev-cost-breakdown > div,
+#prev-revenue-share-summary > div{display:flex; justify-content:space-between; gap:16px; margin:7px 0; font-size:12px;}
 .quotation-cost-breakdown strong,
-#prev-cost-breakdown strong{font-variant-numeric:tabular-nums;}
+#prev-cost-breakdown strong,
+#prev-revenue-share-summary strong{font-variant-numeric:tabular-nums;}
 .quotation-cost-breakdown .excluded{color:var(--muted);}
 #prev-cost-breakdown{margin-bottom:12px; color:#334155;}
+#prev-revenue-share-summary{margin:12px 0; padding-top:10px; border-top:1px dashed #cbd5e1; color:#334155;}
 #prev-cost-breakdown .excluded{color:#64748b;}
 .quotation-total-row{
   display:flex; justify-content:space-between;
@@ -3922,16 +3933,31 @@ function clearBuildingEditorInvalidState(form) {
 function normalizeOtherFees(value) {
   if (!value) return [];
   if (Array.isArray(value)) {
-    return value.map(item => ({
-      label: String(item?.label || item?.name || '').trim(),
-      amount: toNullableNumber(item?.amount ?? item?.value ?? item?.fee),
-      note: String(item?.note || item?.remark || '').trim()
-    })).filter(item => item.label || item.amount !== null || item.note);
+    return value.map(item => {
+      const calculationType = item?.calculation_type === 'revenue_share' ? 'revenue_share' : 'fixed';
+      return {
+        label: String(item?.label || item?.name || '').trim(),
+        calculation_type: calculationType,
+        amount: calculationType === 'fixed'
+          ? toNullableNumber(item?.amount ?? item?.value ?? item?.fee)
+          : null,
+        rate: calculationType === 'revenue_share'
+          ? toNullableNumber(item?.rate ?? item?.percentage ?? item?.amount)
+          : null,
+        revenue_period: calculationType === 'revenue_share'
+          ? (item?.revenue_period === 'annual' ? 'annual' : 'monthly')
+          : null,
+        note: String(item?.note || item?.remark || '').trim()
+      };
+    }).filter(item => item.label || item.amount !== null || item.rate !== null || item.note);
   }
   if (typeof value === 'object') {
     return Object.entries(value).map(([label, amount]) => ({
       label: String(label || '').trim(),
+      calculation_type: 'fixed',
       amount: toNullableNumber(amount),
+      rate: null,
+      revenue_period: null,
       note: ''
     })).filter(item => item.label || item.amount !== null);
   }
@@ -3944,13 +3970,31 @@ function addOtherFeeRow(fee = {}) {
 
   const row = document.createElement('div');
   row.className = 'other-fee-row';
+  const calculationType = fee.calculation_type === 'revenue_share' ? 'revenue_share' : 'fixed';
+  const value = calculationType === 'revenue_share' ? fee.rate : fee.amount;
   row.innerHTML = `
     <div class="building-field"><label>ชื่อรายการ</label><input name="other_fee_label" type="text" value="${attrEsc(fee.label || '')}" placeholder="เช่น ค่าบัตรผ่าน"></div>
-    <div class="building-field"><label>จำนวนเงิน</label><input name="other_fee_amount" type="number" step="0.01" min="0" value="${attrEsc(fee.amount ?? '')}"></div>
+    <div class="building-field"><label>วิธีคิด</label><select name="other_fee_calculation_type"><option value="fixed"${calculationType === 'fixed' ? ' selected' : ''}>จำนวนเงินคงที่</option><option value="revenue_share"${calculationType === 'revenue_share' ? ' selected' : ''}>ส่วนแบ่งรายได้ (%)</option></select></div>
+    <div class="building-field"><label class="other-fee-value-label">${calculationType === 'revenue_share' ? 'อัตรา (%)' : 'จำนวนเงิน (บาท)'}</label><input name="other_fee_value" type="number" step="0.01" min="0" ${calculationType === 'revenue_share' ? 'max="100"' : ''} value="${attrEsc(value ?? '')}"></div>
+    <div class="building-field other-fee-period"${calculationType === 'revenue_share' ? '' : ' hidden'}><label>คิดจากรายได้</label><select name="other_fee_revenue_period"><option value="monthly"${fee.revenue_period !== 'annual' ? ' selected' : ''}>รายเดือน</option><option value="annual"${fee.revenue_period === 'annual' ? ' selected' : ''}>รายปี</option></select></div>
     <div class="building-field"><label>หมายเหตุ</label><input name="other_fee_note" type="text" value="${attrEsc(fee.note || '')}" placeholder="เช่น รายปี / ต่อครั้ง"></div>
     <button type="button" class="other-fee-remove">ลบ</button>
   `;
   list.appendChild(row);
+}
+
+function updateOtherFeeRowControls(row) {
+  if (!row) return;
+  const isRevenueShare = row.querySelector('[name="other_fee_calculation_type"]')?.value === 'revenue_share';
+  const valueLabel = row.querySelector('.other-fee-value-label');
+  const valueInput = row.querySelector('[name="other_fee_value"]');
+  const periodField = row.querySelector('.other-fee-period');
+  if (valueLabel) valueLabel.textContent = isRevenueShare ? 'อัตรา (%)' : 'จำนวนเงิน (บาท)';
+  if (valueInput) {
+    if (isRevenueShare) valueInput.setAttribute('max', '100');
+    else valueInput.removeAttribute('max');
+  }
+  if (periodField) periodField.hidden = !isRevenueShare;
 }
 
 function renderOtherFeeRows(fees = []) {
@@ -3962,12 +4006,23 @@ function renderOtherFeeRows(fees = []) {
 
 function collectOtherFees() {
   return [...document.querySelectorAll('#other-fees-list .other-fee-row')]
-    .map(row => ({
-      label: String(row.querySelector('[name="other_fee_label"]')?.value || '').trim(),
-      amount: toNullableNumber(row.querySelector('[name="other_fee_amount"]')?.value),
-      note: String(row.querySelector('[name="other_fee_note"]')?.value || '').trim()
-    }))
-    .filter(item => item.label || item.amount !== null || item.note);
+    .map(row => {
+      const calculationType = row.querySelector('[name="other_fee_calculation_type"]')?.value === 'revenue_share'
+        ? 'revenue_share'
+        : 'fixed';
+      const value = toNullableNumber(row.querySelector('[name="other_fee_value"]')?.value);
+      return {
+        label: String(row.querySelector('[name="other_fee_label"]')?.value || '').trim(),
+        calculation_type: calculationType,
+        amount: calculationType === 'fixed' ? value : null,
+        rate: calculationType === 'revenue_share' ? value : null,
+        revenue_period: calculationType === 'revenue_share'
+          ? (row.querySelector('[name="other_fee_revenue_period"]')?.value === 'annual' ? 'annual' : 'monthly')
+          : null,
+        note: String(row.querySelector('[name="other_fee_note"]')?.value || '').trim()
+      };
+    })
+    .filter(item => item.label || item.amount !== null || item.rate !== null || item.note);
 }
 
 const BUILDING_BOQ_FEE_FIELDS = [
@@ -4002,7 +4057,7 @@ function applyBuildingBoqCostClassification(profile, classifiedAt = new Date().t
       return normalized ? { ...item, ...normalized } : null;
     })
     .filter(Boolean);
-  const fixedFees = fees.filter(item => item.category !== 'variable_fee');
+  const fixedFees = fees.filter(item => !['variable_fee', 'revenue_share'].includes(item.category));
   const totalByType = costType => fixedFees
     .filter(item => item.cost_type === costType)
     .reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
@@ -4046,15 +4101,20 @@ function buildBuildingBoqProfile(record, existingProfile = null) {
     .filter(item => item.amount !== null);
 
   normalizeOtherFees(record?.other_fees).forEach((item, index) => {
+    const isRevenueShare = item.calculation_type === 'revenue_share';
     fees.push({
       key: `other_fee_${index + 1}`,
       source_field: 'other_fees',
       label: item.label || 'ค่าใช้จ่ายเพิ่มเติม',
-      amount: item.amount,
-      unit: item.note || 'ครั้ง',
+      calculation_type: isRevenueShare ? 'revenue_share' : 'fixed',
+      amount: isRevenueShare ? null : item.amount,
+      rate: isRevenueShare ? item.rate : null,
+      revenue_period: isRevenueShare ? item.revenue_period : null,
+      unit: isRevenueShare ? '%' : (item.note || 'ครั้ง'),
+      note: item.note || '',
       payable: true,
-      category: 'other_fee',
-      cost_type: 'UNCLASSIFIED'
+      category: isRevenueShare ? 'revenue_share' : 'other_fee',
+      cost_type: isRevenueShare ? 'OPEX' : 'UNCLASSIFIED'
     });
   });
   fees.push(...externalFees);
@@ -4081,17 +4141,30 @@ function hasStoredBuildingBoqProfile(record) {
 }
 
 function normalizeBuildingBoqFee(item, index = 0) {
+  const calculationType = item?.calculation_type === 'revenue_share' || item?.category === 'revenue_share'
+    ? 'revenue_share'
+    : 'fixed';
   const amount = toNullableNumber(item?.amount);
-  if (amount === null) return null;
+  const rate = calculationType === 'revenue_share'
+    ? toNullableNumber(item?.rate ?? item?.percentage ?? item?.amount)
+    : null;
+  if (calculationType === 'fixed' && amount === null) return null;
+  if (calculationType === 'revenue_share' && rate === null) return null;
   return {
     key: String(item?.key || item?.source_field || `fee_${index + 1}`),
     source_field: String(item?.source_field || item?.key || ''),
     label: String(item?.label || 'ค่าใช้จ่ายอาคาร').trim(),
-    amount,
-    unit: String(item?.unit || 'ครั้ง').trim(),
+    calculation_type: calculationType,
+    amount: calculationType === 'fixed' ? amount : null,
+    rate,
+    revenue_period: calculationType === 'revenue_share'
+      ? (item?.revenue_period === 'annual' ? 'annual' : 'monthly')
+      : null,
+    unit: calculationType === 'revenue_share' ? '%' : String(item?.unit || 'ครั้ง').trim(),
+    note: String(item?.note || '').trim(),
     payable: item?.payable !== false,
-    category: String(item?.category || 'building_fee').trim(),
-    cost_type: resolveBuildingBoqCostType(item)
+    category: calculationType === 'revenue_share' ? 'revenue_share' : String(item?.category || 'building_fee').trim(),
+    cost_type: calculationType === 'revenue_share' ? 'OPEX' : resolveBuildingBoqCostType(item)
   };
 }
 
@@ -4121,15 +4194,21 @@ function getBuildingBoqFeeAmount(record, key) {
 function getBuildingBoqOtherFees(record) {
   if (!hasStoredBuildingBoqProfile(record)) return normalizeOtherFees(record?.other_fees);
   return getBuildingBoqFees(record)
-    .filter(item => item.category === 'other_fee' || item.source_field === 'other_fees')
+    .filter(item => ['other_fee', 'revenue_share'].includes(item.category) || item.source_field === 'other_fees')
     .map(item => ({
       label: item.label,
       amount: item.amount,
-      note: item.unit === 'ครั้ง' ? '' : item.unit
+      calculation_type: item.calculation_type,
+      rate: item.rate,
+      revenue_period: item.revenue_period,
+      note: item.note || (item.calculation_type === 'fixed' && item.unit !== 'ครั้ง' ? item.unit : '')
     }));
 }
 
 function formatBuildingBoqFeeQuantity(fee) {
+  if (fee?.calculation_type === 'revenue_share') {
+    return `${formatCurrencyNumeric(Number(fee.rate) || 0)}% ของรายได้${fee.revenue_period === 'annual' ? 'รายปี' : 'รายเดือน'}`;
+  }
   if (!fee?.unit || fee.unit === 'ครั้ง') return '1 ครั้ง';
   return fee.category === 'other_fee' ? fee.unit : `1 ${fee.unit}`;
 }
@@ -4348,6 +4427,19 @@ async function saveBuildingFromForm(form) {
   const existingRecord = existingId ? findBuildingById(existingId) : null;
   clearBuildingEditorInvalidState(form);
 
+  const invalidRevenueShareRow = [...form.querySelectorAll('.other-fee-row')].find(row => {
+    if (row.querySelector('[name="other_fee_calculation_type"]')?.value !== 'revenue_share') return false;
+    const rate = toNullableNumber(row.querySelector('[name="other_fee_value"]')?.value);
+    return rate === null || rate < 0 || rate > 100;
+  });
+  if (invalidRevenueShareRow) {
+    const rateInput = invalidRevenueShareRow.querySelector('[name="other_fee_value"]');
+    rateInput?.classList.add('is-invalid');
+    setBuildingEditorMessage('อัตราส่วนแบ่งรายได้ต้องอยู่ระหว่าง 0 ถึง 100%');
+    rateInput?.focus();
+    return;
+  }
+
   // รายการใหม่: ใช้ Firestore auto-generated ID เพื่อกันชนกันเวลามีหลายคนเพิ่มข้อมูลพร้อมกัน
   const recordId = existingId || window.FSDB.newId();
 
@@ -4523,6 +4615,24 @@ function _updateQuotationDynamicInputs() {
   hwireRateEl.textContent = hwireHints.join(' | ');
   hwireRateEl.style.color = hwireHints.length ? 'var(--yellow)' : 'var(--muted)';
 
+  // Revenue inputs are quotation-specific because forecast revenue can change over time.
+  const revenueShareFees = getBuildingBoqFees(building)
+    .filter(item => item.payable && item.calculation_type === 'revenue_share');
+  const needsMonthlyRevenue = revenueShareFees.some(item => item.revenue_period !== 'annual');
+  const needsAnnualRevenue = revenueShareFees.some(item => item.revenue_period === 'annual');
+  const revenuePanel = document.getElementById('quotation-revenue-panel');
+  const monthlyRevenueGroup = document.getElementById('quotation-monthly-revenue-group');
+  const annualRevenueGroup = document.getElementById('quotation-annual-revenue-group');
+  if (revenuePanel) revenuePanel.style.display = revenueShareFees.length ? 'block' : 'none';
+  if (monthlyRevenueGroup) monthlyRevenueGroup.style.display = needsMonthlyRevenue ? 'block' : 'none';
+  if (annualRevenueGroup) annualRevenueGroup.style.display = needsAnnualRevenue ? 'block' : 'none';
+  const revenueHint = document.getElementById('quotation-revenue-hint');
+  if (revenueHint) {
+    revenueHint.textContent = revenueShareFees.map(item =>
+      `${item.label} ${formatCurrencyNumeric(Number(item.rate) || 0)}% (${item.revenue_period === 'annual' ? 'รายปี' : 'รายเดือน'})`
+    ).join(' • ');
+  }
+
   // Reset summary/shaft info
   document.getElementById('quotation-distance-summary').style.display = 'none';
   document.getElementById('quotation-shaft-info').style.display = 'none';
@@ -4533,7 +4643,9 @@ const QUOTATION_STATE_IDS = [
   'quotation-cust-floor',
   'quotation-wm-select',
   'quotation-wm-manual',
-  'quotation-hwire'
+  'quotation-hwire',
+  'quotation-monthly-revenue',
+  'quotation-annual-revenue'
 ];
 
 function serializeQuotationState() {
@@ -4630,6 +4742,32 @@ function calculateQuotation() {
 
   // Get WM floor
   const building = window.currentBuildingData || {};
+  const boqFees = getBuildingBoqFees(building);
+  const revenueShareFeeRules = boqFees
+    .filter(item => item.payable && item.calculation_type === 'revenue_share');
+  const needsMonthlyRevenue = revenueShareFeeRules.some(item => item.revenue_period !== 'annual');
+  const needsAnnualRevenue = revenueShareFeeRules.some(item => item.revenue_period === 'annual');
+  const monthlyRevenueRaw = document.getElementById('quotation-monthly-revenue')?.value ?? '';
+  const annualRevenueRaw = document.getElementById('quotation-annual-revenue')?.value ?? '';
+  const monthlyRevenue = Number(monthlyRevenueRaw);
+  const annualRevenue = Number(annualRevenueRaw);
+
+  if (needsMonthlyRevenue && (monthlyRevenueRaw === '' || !Number.isFinite(monthlyRevenue) || monthlyRevenue < 0)) {
+    msgEl.className = 'error';
+    msgEl.innerHTML = iconText('x', 'กรุณากรอกรายได้ประมาณการต่อเดือน');
+    msgEl.style.display = 'block';
+    document.getElementById('quotation-monthly-revenue')?.focus();
+    return;
+  }
+
+  if (needsAnnualRevenue && (annualRevenueRaw === '' || !Number.isFinite(annualRevenue) || annualRevenue < 0)) {
+    msgEl.className = 'error';
+    msgEl.innerHTML = iconText('x', 'กรุณากรอกรายได้ประมาณการต่อปี');
+    msgEl.style.display = 'block';
+    document.getElementById('quotation-annual-revenue')?.focus();
+    return;
+  }
+
   const wmRaw = String(building.wm_point || '').trim();
   const hasWM = wmRaw && wmRaw.toLowerCase() !== 'no' && wmRaw !== '' && wmRaw !== 'null';
   let wmFloor;
@@ -4685,7 +4823,6 @@ function calculateQuotation() {
   const cableCost = totalCableDistance * CABLE_RATE;
 
   // Building fees
-  const boqFees = getBuildingBoqFees(building);
   const shaftRatePerFloor = Number(getBuildingBoqFeeAmount(building, 'shaft_fee_per_floor')) || 0;
   const horizontalRatePerMeter = Number(getBuildingBoqFeeAmount(building, 'horizontal_fee')) || 0;
 
@@ -4705,7 +4842,7 @@ function calculateQuotation() {
   }
 
   const fixedPayableFees = boqFees
-    .filter(item => item.payable && item.category !== 'variable_fee')
+    .filter(item => item.payable && !['variable_fee', 'revenue_share'].includes(item.category))
     .map(item => ({
       label: item.label,
       value: item.amount,
@@ -4720,6 +4857,25 @@ function calculateQuotation() {
       qty: formatBuildingBoqFeeQuantity(item),
       cost_type: item.cost_type
     }));
+  const revenueShareFees = revenueShareFeeRules.map(item => {
+    const rate = Number(item.rate) || 0;
+    const isAnnual = item.revenue_period === 'annual';
+    const baseRevenue = isAnnual ? annualRevenue : monthlyRevenue;
+    const periodValue = baseRevenue * rate / 100;
+    return {
+      label: `${item.label} (${formatCurrencyNumeric(rate)}% ของรายได้${isAnnual ? 'รายปี' : 'รายเดือน'})`,
+      rate,
+      period: isAnnual ? 'annual' : 'monthly',
+      baseRevenue,
+      value: periodValue,
+      monthlyValue: isAnnual ? periodValue / 12 : periodValue,
+      annualValue: isAnnual ? periodValue : periodValue * 12,
+      qty: `${formatCurrencyNumeric(rate)}% × ${formatCurrencyNumeric(baseRevenue)} บาท/${isAnnual ? 'ปี' : 'เดือน'}`,
+      cost_type: 'OPEX'
+    };
+  });
+  const revenueShareMonthlyTotal = revenueShareFees.reduce((sum, item) => sum + item.monthlyValue, 0);
+  const revenueShareAnnualTotal = revenueShareFees.reduce((sum, item) => sum + item.annualValue, 0);
 
   const shaftFee = getBuildingBoqFee(building, 'shaft_fee_per_floor');
   const horizontalFee = getBuildingBoqFee(building, 'horizontal_fee');
@@ -4796,6 +4952,26 @@ function calculateQuotation() {
       </div>`;
   buildingFeesContainer.innerHTML = buildingFeesHtml + nonPayableFeesHtml + costBreakdownHtml;
 
+  const revenueShareSummaryEl = document.getElementById('quotation-revenue-share-summary');
+  revenueShareSummaryEl.innerHTML = revenueShareFees.length ? `
+      <div class="quotation-calc-section">
+        <span>OPEX ส่วนแบ่งรายได้</span>
+        <span>ค่าใช้จ่ายต่อเนื่อง</span>
+      </div>
+      ${revenueShareFees.map(f => `
+        <div class="quotation-calc-row">
+          <span class="quotation-calc-label">${esc(f.label)}</span>
+          <span class="quotation-calc-value">${formatCurrency(f.value)}/${f.period === 'annual' ? 'ปี' : 'เดือน'}</span>
+        </div>`).join('')}
+      <div class="quotation-cost-breakdown">
+        <div><span>รวมส่วนแบ่งเฉลี่ยต่อเดือน</span><strong>${formatCurrency(revenueShareMonthlyTotal)}</strong></div>
+        <div><span>รวมส่วนแบ่งต่อปี</span><strong>${formatCurrency(revenueShareAnnualTotal)}</strong></div>
+      </div>` : '';
+
+  document.getElementById('quotation-total-label').textContent = revenueShareFees.length
+    ? 'ยอดค่าใช้จ่ายคงที่/เริ่มต้น'
+    : 'ยอดรวมที่ต้องชำระ';
+
   document.getElementById('quotation-total-cost').textContent = formatCurrency(totalCost);
 
   // ===== UPDATE PREVIEW =====
@@ -4845,7 +5021,18 @@ function calculateQuotation() {
         <td colspan="3">รวมรายการไม่นำมาคำนวณ</td>
         <td class="quotation-amount">${formatCurrencyNumeric(nonPayableTotal)} บาท</td>
       </tr>` : '';
-  prevBuildingFeesContainer.innerHTML = buildingFeesPreviewHtml + nonPayableFeesPreviewHtml;
+  const revenueShareFeesPreviewHtml = revenueShareFees.length ? `
+      <tr class="quotation-section-row">
+        <td colspan="4">OPEX ส่วนแบ่งรายได้ (ค่าใช้จ่ายต่อเนื่อง)</td>
+      </tr>
+      ${revenueShareFees.map(f => `
+        <tr>
+          <td>${previewItemIndex++}</td>
+          <td>${esc(f.label)}</td>
+          <td>${esc(f.qty)}</td>
+          <td class="quotation-amount">${formatCurrencyNumeric(f.value)} บาท/${f.period === 'annual' ? 'ปี' : 'เดือน'}</td>
+        </tr>`).join('')}` : '';
+  prevBuildingFeesContainer.innerHTML = buildingFeesPreviewHtml + nonPayableFeesPreviewHtml + revenueShareFeesPreviewHtml;
 
   document.getElementById('prev-cost-breakdown').innerHTML = `
     <div><span>CAPEX รวม</span><strong>${formatCurrencyNumeric(capexTotal)} บาท</strong></div>
@@ -4853,6 +5040,12 @@ function calculateQuotation() {
     ${depositPayableTotal > 0 ? `<div><span>Deposit ที่ต้องชำระ</span><strong>${formatCurrencyNumeric(depositPayableTotal)} บาท</strong></div>` : ''}
     ${unclassifiedPayableTotal > 0 ? `<div><span>ยังไม่จัดประเภท</span><strong>${formatCurrencyNumeric(unclassifiedPayableTotal)} บาท</strong></div>` : ''}
     ${nonPayableTotal > 0 ? `<div class="excluded"><span>รายการไม่นำมาคำนวณ</span><strong>${formatCurrencyNumeric(nonPayableTotal)} บาท</strong></div>` : ''}`;
+  document.getElementById('prev-revenue-share-summary').innerHTML = revenueShareFees.length ? `
+    <div><span>ส่วนแบ่งรายได้เฉลี่ยต่อเดือน</span><strong>${formatCurrencyNumeric(revenueShareMonthlyTotal)} บาท</strong></div>
+    <div><span>ส่วนแบ่งรายได้ต่อปี</span><strong>${formatCurrencyNumeric(revenueShareAnnualTotal)} บาท</strong></div>` : '';
+  document.getElementById('prev-total-label').textContent = revenueShareFees.length
+    ? 'ยอดค่าใช้จ่ายคงที่/เริ่มต้น'
+    : 'ยอดรวมที่ต้องชำระ';
   document.getElementById('prev-total').textContent = formatCurrencyNumeric(totalCost) + ' บาท';
 
   window._quotationCalculated = true;
@@ -4966,6 +5159,8 @@ function resetQuotationForm(options = {}) {
   document.getElementById('quotation-customer').value = '';
   document.getElementById('quotation-cust-floor').value = '';
   document.getElementById('quotation-hwire').value = '';
+  document.getElementById('quotation-monthly-revenue').value = '';
+  document.getElementById('quotation-annual-revenue').value = '';
   document.getElementById('quotation-wm-manual').value = '';
   const wmSelect = document.getElementById('quotation-wm-select');
   if (wmSelect) wmSelect.selectedIndex = 0;
@@ -4975,6 +5170,8 @@ function resetQuotationForm(options = {}) {
   document.getElementById('quotation-splice-cost').textContent = '400 บาท';
   document.getElementById('quotation-installation-subtotal').textContent = '2,800 บาท';
   document.getElementById('quotation-building-fees').innerHTML = '';
+  document.getElementById('quotation-revenue-share-summary').innerHTML = '';
+  document.getElementById('quotation-total-label').textContent = 'ยอดรวมที่ต้องชำระ';
   document.getElementById('quotation-total-cost').textContent = '2,800 บาท';
   document.getElementById('quotation-message').style.display = 'none';
   resetQuotationExportMessage();
@@ -4992,6 +5189,8 @@ function resetQuotationForm(options = {}) {
   document.getElementById('prev-installation-subtotal').textContent = '2,800.00 บาท';
   document.getElementById('prev-building-fees-table').innerHTML = '';
   document.getElementById('prev-cost-breakdown').innerHTML = '';
+  document.getElementById('prev-revenue-share-summary').innerHTML = '';
+  document.getElementById('prev-total-label').textContent = 'ยอดรวมที่ต้องชำระ';
   document.getElementById('prev-total').textContent = '-';
   window._quotationCalculated = false;
   window.currentBuildingData = buildingData || {};
@@ -5271,7 +5470,10 @@ document.addEventListener('DOMContentLoaded', function() {
     buildingEditorForm.addEventListener('input', function() {
       clearBuildingEditorInvalidState(buildingEditorForm);
     });
-    buildingEditorForm.addEventListener('change', function() {
+    buildingEditorForm.addEventListener('change', function(e) {
+      if (e.target.matches('[name="other_fee_calculation_type"]')) {
+        updateOtherFeeRowControls(e.target.closest('.other-fee-row'));
+      }
       clearBuildingEditorInvalidState(buildingEditorForm);
     });
   }
@@ -5417,6 +5619,19 @@ document.addEventListener('DOMContentLoaded', function() {
         <small id="quotation-hwire-rate" style="color:var(--muted);font-size:11px;margin-top:3px;display:block;"></small>
       </div>
 
+      <div id="quotation-revenue-panel" class="quotation-revenue-panel">
+        <div class="quotation-revenue-panel-title">รายได้สำหรับคำนวณส่วนแบ่ง</div>
+        <div id="quotation-monthly-revenue-group" class="quotation-form-group" style="display:none;">
+          <label for="quotation-monthly-revenue">รายได้ประมาณการต่อเดือน (บาท) *</label>
+          <input type="number" id="quotation-monthly-revenue" placeholder="เช่น 100000" min="0" step="0.01">
+        </div>
+        <div id="quotation-annual-revenue-group" class="quotation-form-group" style="display:none;">
+          <label for="quotation-annual-revenue">รายได้ประมาณการต่อปี (บาท) *</label>
+          <input type="number" id="quotation-annual-revenue" placeholder="เช่น 1200000" min="0" step="0.01">
+        </div>
+        <small id="quotation-revenue-hint" style="color:var(--text2);font-size:11px;line-height:1.6;display:block;"></small>
+      </div>
+
       <!-- Summary box: แสดงการคำนวณระยะสาย -->
       <div id="quotation-distance-summary" style="display:none; background:var(--surface3); border:1px solid var(--border2); border-radius:8px; padding:10px 14px; margin-bottom:4px; font-size:12px; line-height:1.8;">
         <div style="font-weight:700; color:var(--accent); margin-bottom:4px; display:flex; align-items:center; gap:6px;"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17 17 4l3 3L7 20l-3-3Z"/><path d="m14 7 3 3"/><path d="m11 10 2 2"/><path d="m8 13 3 3"/></svg> สรุประยะสาย</div>
@@ -5456,9 +5671,11 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
         
         <div id="quotation-building-fees"></div>
+
+        <div id="quotation-revenue-share-summary"></div>
         
         <div class="quotation-total-row">
-          <span class="quotation-total-label">ยอดรวมที่ต้องชำระ</span>
+          <span class="quotation-total-label" id="quotation-total-label">ยอดรวมที่ต้องชำระ</span>
           <span class="quotation-total-value" id="quotation-total-cost">2,800 บาท</span>
         </div>
       </div>
@@ -5551,8 +5768,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         <div class="quotation-preview-summary">
           <div id="prev-cost-breakdown"></div>
+          <div id="prev-revenue-share-summary"></div>
           <div class="quotation-summary-total">
-            <span>ยอดรวมที่ต้องชำระ</span>
+            <span id="prev-total-label">ยอดรวมที่ต้องชำระ</span>
             <span id="prev-total">-</span>
           </div>
         </div>
