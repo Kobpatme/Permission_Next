@@ -3554,19 +3554,29 @@ function openDrawer(r) {
 
   // Tab: Fee
   const feeRows = getBuildingBoqFees(r)
-    .filter(item => item.amount !== 0)
-    .map(item => [
-      item.label,
-      item.amount,
-      [item.cost_type, item.unit !== 'ครั้ง' ? item.unit : ''].filter(Boolean).join(' • ')
-    ]);
+    .filter(item => item.calculation_type === 'revenue_share'
+      ? Number(item.rate) !== 0
+      : item.amount !== 0)
+    .map(item => {
+      const isRevenueShare = item.calculation_type === 'revenue_share';
+      return {
+        label: item.label,
+        amount: isRevenueShare ? null : item.amount,
+        valueText: isRevenueShare
+          ? `${formatCurrencyNumeric(Number(item.rate) || 0)}%`
+          : fmt(item.amount),
+        detail: isRevenueShare
+          ? [item.cost_type, `คิดจากรายได้${item.revenue_period === 'annual' ? 'รายปี' : 'รายเดือน'}`].filter(Boolean).join(' • ')
+          : [item.cost_type, item.unit !== 'ครั้ง' ? item.unit : ''].filter(Boolean).join(' • ')
+      };
+    });
 
-  const totalFee = feeRows.reduce((sum,[,v]) => sum + (Number(v)||0), 0);
+  const totalFee = feeRows.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
   document.getElementById('tab-fee').innerHTML = feeRows.length
     ? `<div class="section-head">ค่าธรรมเนียม</div>
        <table class="fee-table">
-         ${feeRows.map(([l,v,n]) => `<tr><td>${esc(l)}${n ? `<br><span style="font-size:11px;color:var(--muted);font-weight:600">${esc(n)}</span>` : ''}</td><td>${esc(fmt(v))}</td></tr>`).join('')}
+         ${feeRows.map(item => `<tr><td>${esc(item.label)}${item.detail ? `<br><span style="font-size:11px;color:var(--muted);font-weight:600">${esc(item.detail)}</span>` : ''}</td><td>${esc(item.valueText)}</td></tr>`).join('')}
          ${totalFee > 0 ? `<tr class="fee-total-row"><td>รวมทั้งหมด</td><td>${fmt(totalFee)}</td></tr>` : ''}
        </table>`
     : `<div class="no-fee">ไม่มีข้อมูลค่าธรรมเนียม</div>`;
