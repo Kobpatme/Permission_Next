@@ -1467,13 +1467,16 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
   background:var(--surface2);
   box-shadow:0 0 0 3px var(--accent-soft);
 }
-.quotation-revenue-panel{
+.quotation-revenue-panel,
+.quotation-permission-panel{
   display:none; margin:4px 0 16px; padding:14px;
   border:1px solid color-mix(in oklab, var(--accent) 28%, transparent);
   border-radius:10px; background:var(--grad-accent-soft);
 }
-.quotation-revenue-panel-title{font-size:12px; font-weight:800; color:var(--accent); margin-bottom:10px;}
-.quotation-revenue-panel .quotation-form-group:last-child{margin-bottom:0;}
+.quotation-revenue-panel-title,
+.quotation-permission-panel-title{font-size:12px; font-weight:800; color:var(--accent); margin-bottom:10px;}
+.quotation-revenue-panel .quotation-form-group:last-child,
+.quotation-permission-panel .quotation-form-group:last-child{margin-bottom:0;}
 
 .quotation-calc-display{
   background:var(--grad-accent-soft);
@@ -2521,11 +2524,15 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
   const buildingsCol = collection(db, 'buildings');
   const authDocRef = doc(buildingsCol, 'permission_next_auth');
   const authBackupDocRef = doc(buildingsCol, 'permission_next_auth_backup');
-  const protectedAuthDocIds = new Set(['permission_next_auth', 'permission_next_auth_backup']);
+  const protectedSystemDocIds = new Set([
+    'permission_next_auth',
+    'permission_next_auth_backup',
+    'permission_type_formulas'
+  ]);
 
   function assertBuildingDocIsNotProtected(id) {
-    if (protectedAuthDocIds.has(String(id))) {
-      throw new Error('ไม่อนุญาตให้แก้ไขหรือลบเอกสารระบบผู้ใช้ผ่านคำสั่งจัดการอาคาร');
+    if (protectedSystemDocIds.has(String(id))) {
+      throw new Error('ไม่อนุญาตให้แก้ไขหรือลบเอกสารระบบผ่านคำสั่งจัดการอาคาร');
     }
   }
 
@@ -2784,6 +2791,20 @@ function normalizeBuildingRecord(r) {
 
 let DATA = [];
 let firestoreUnsub = null;
+let PERMISSION_TYPE_FORMULAS = {};
+let PERMISSION_TYPE_FORMULA_VERSION = null;
+
+function setPermissionTypeFormulaRegistry(rawConfig) {
+  const formulas = rawConfig?.formulas;
+  PERMISSION_TYPE_FORMULAS = formulas && typeof formulas === 'object'
+    ? Object.fromEntries(
+        Object.entries(formulas)
+          .map(([type, formula]) => [String(type).trim().toUpperCase(), formula])
+          .filter(([type, formula]) => ['L1', 'L2', 'L3'].includes(type) && formula && typeof formula === 'object')
+      )
+    : {};
+  PERMISSION_TYPE_FORMULA_VERSION = Number(rawConfig?.version) || null;
+}
 
 function whenFsdbReady(callback) {
   if (window.FSDB) { callback(); return; }
@@ -2833,7 +2854,7 @@ const BUILDING_CSV_COLUMNS = [
   ['coordination_fee', 'ค่าธรรมเนียมประสานงาน (Coordination Fee)'],
   ['shaft_fee_per_floor', 'ค่า Shaft ต่อชั้น'],
   ['horizontal_fee', 'ค่าวางสายทั้งเส้น /ม.'],
-  ['calculation_profile', 'สูตรคำนวณเฉพาะอาคาร'],
+  ['installation_profile', 'สูตรต้นทุนติดตั้งเฉพาะอาคาร'],
   ['other_fees', 'ค่าใช้จ่ายเพิ่มเติม'],
   ['duration', 'ระยะ Permission'],
   ['update_date', 'อัปเดตล่าสุด'],
@@ -3325,10 +3346,15 @@ function startRealtimeSync() {
   firestoreUnsub = window.FSDB.onSnapshot(
     snapshot => {
       const autoCheckUpdates = [];
+      setPermissionTypeFormulaRegistry(null);
       DATA = snapshot.docs
         .map(docSnap => {
           const raw = docSnap.data();
           if (raw._kind === 'permission_next_auth') return null;
+          if (raw._kind === 'permission_type_formulas') {
+            setPermissionTypeFormulaRegistry(raw);
+            return null;
+          }
           raw._docId = docSnap.id;
           if (raw.id === undefined || raw.id === null || raw.id === '') raw.id = docSnap.id;
           if (shouldAutoCheckPermissionStatus(raw)) autoCheckUpdates.push({ docId: docSnap.id });
@@ -4121,7 +4147,7 @@ function toNullableNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 
-const DEFAULT_BUILDING_CALCULATION_PROFILE = Object.freeze({
+const DEFAULT_INSTALLATION_PROFILE = Object.freeze({
   version: 1,
   meters_per_floor: 5,
   cable_rate_per_meter: 158.36,
@@ -4132,7 +4158,7 @@ const DEFAULT_BUILDING_CALCULATION_PROFILE = Object.freeze({
   cable_route_basis: 'total_distance'
 });
 
-const BUILDING_CALCULATION_NUMBER_FIELDS = [
+const INSTALLATION_PROFILE_NUMBER_FIELDS = [
   'meters_per_floor',
   'cable_rate_per_meter',
   'equipment_cost',
@@ -4140,12 +4166,14 @@ const BUILDING_CALCULATION_NUMBER_FIELDS = [
   'splice_cost'
 ];
 
-function getBuildingCalculationProfile(record) {
-  const storedProfile = record?.calculation_profile && typeof record.calculation_profile === 'object'
-    ? record.calculation_profile
-    : {};
-  const resolvedProfile = { ...DEFAULT_BUILDING_CALCULATION_PROFILE };
-  BUILDING_CALCULATION_NUMBER_FIELDS.forEach(field => {
+function getBuildingInstallationProfile(record) {
+  const currentProfile = record?.installation_profile;
+  const legacyProfile = record?.calculation_profile;
+  const storedProfile = currentProfile && typeof currentProfile === 'object'
+    ? currentProfile
+    : (legacyProfile && typeof legacyProfile === 'object' ? legacyProfile : {});
+  const resolvedProfile = { ...DEFAULT_INSTALLATION_PROFILE };
+  INSTALLATION_PROFILE_NUMBER_FIELDS.forEach(field => {
     const rawValue = storedProfile[field];
     if (rawValue === null || rawValue === undefined || rawValue === '') return;
     const value = Number(rawValue);
@@ -4155,29 +4183,30 @@ function getBuildingCalculationProfile(record) {
   });
   return {
     ...resolvedProfile,
-    version: Number(storedProfile.version) || DEFAULT_BUILDING_CALCULATION_PROFILE.version,
+    version: Number(storedProfile.version) || DEFAULT_INSTALLATION_PROFILE.version,
     floor_count_mode: 'inclusive',
     cable_route_basis: 'total_distance'
   };
 }
 
-function getStoredBuildingCalculationValue(record, field) {
-  const value = record?.calculation_profile?.[field];
+function getStoredBuildingInstallationValue(record, field) {
+  const storedProfile = record?.installation_profile || record?.calculation_profile;
+  const value = storedProfile?.[field];
   return value === null || value === undefined ? '' : value;
 }
 
-function buildBuildingCalculationProfile(formData, existingProfile = null) {
+function buildBuildingInstallationProfile(formData, existingProfile = null) {
   const profile = existingProfile && typeof existingProfile === 'object'
     ? { ...existingProfile }
     : {};
-  BUILDING_CALCULATION_NUMBER_FIELDS.forEach(field => {
+  INSTALLATION_PROFILE_NUMBER_FIELDS.forEach(field => {
     delete profile[field];
     const value = toNullableNumber(formData.get(`calc_${field}`));
     if (value !== null) profile[field] = value;
   });
   return {
     ...profile,
-    version: DEFAULT_BUILDING_CALCULATION_PROFILE.version,
+    version: DEFAULT_INSTALLATION_PROFILE.version,
     floor_count_mode: 'inclusive',
     cable_route_basis: 'total_distance',
     updated_at: new Date().toISOString()
@@ -4501,6 +4530,348 @@ function formatBuildingBoqFeeQuantity(fee) {
   return fee.category === 'other_fee' ? fee.unit : `1 ${fee.unit}`;
 }
 
+const PERMISSION_FIELD_RULES = Object.freeze({
+  main_fee: { label: 'ค่าธรรมเนียม (Main Fee)', cost_type: 'CAPEX' },
+  coordination_fee: { label: 'ค่าธรรมเนียมประสานงาน', cost_type: 'CAPEX' },
+  engineer_sign_fee: { label: 'ค่าวิศวกรลงนาม', cost_type: 'CAPEX' },
+  circuit_activation_fee: { label: 'ค่าเปิดวงจร', cost_type: 'CAPEX', multiplier: 'circuitCount', unit: 'วงจร' },
+  ot_fee_per_night: { label: 'ค่าดำเนินการนอกเวลา', cost_type: 'CAPEX', multiplier: 'otNights', unit: 'คืน' },
+  insurance_fee: { label: 'ค่าประกัน (Insurance)', cost_type: 'CAPEX' },
+  customer_fee: { label: 'ค่าใช้จ่ายต่อลูกค้า', cost_type: 'CAPEX' },
+  damage_deposit: { label: 'เงินประกันติดตั้ง (Deposit)', cost_type: 'DEPOSIT', payable: false },
+  contract_deposit: { label: 'ค่ามัดจำสัญญา', cost_type: 'DEPOSIT', payable: true },
+  monthly_fee: { label: 'ค่าบริการรายเดือน', cost_type: 'OPEX', suffix: '/เดือน' },
+  annual_fee: { label: 'ค่าบริการรายปี', cost_type: 'OPEX', suffix: '/ปี' },
+  horizontal_fee: { label: 'ค่าวางสายทั้งเส้น', cost_type: 'CAPEX' },
+  shaft_fee_per_floor: { label: 'ค่า Shaft ต่อชั้น', cost_type: 'CAPEX' },
+  shaft_fee_per_meter: { label: 'ค่า Shaft ต่อเมตร', cost_type: 'CAPEX' },
+  shaft_fee_per_time: { label: 'ค่า Shaft ต่อครั้ง', cost_type: 'CAPEX' },
+  fee_per_meter: { label: 'ค่าธรรมเนียมต่อเมตร', cost_type: 'CAPEX' },
+  annual_fee_per_meter: { label: 'ค่าบริการรายปีต่อเมตร', cost_type: 'OPEX' },
+  core_rent_per_month_contract: { label: 'ค่าเช่า Core ตามสัญญา', cost_type: 'OPEX' },
+  core_rent_per_month_1yr: { label: 'ค่าเช่า Core สัญญา 1 ปี', cost_type: 'OPEX' },
+  core_rent_per_month_2yr: { label: 'ค่าเช่า Core สัญญา 2 ปี', cost_type: 'OPEX' },
+  core_rent_per_month_3yr: { label: 'ค่าเช่า Core สัญญา 3 ปี', cost_type: 'OPEX' }
+});
+
+const PERMISSION_FORMULA_MODES = Object.freeze({
+  horizontal: new Set(['none', 'fixed']),
+  shaft: new Set(['none', 'per_floor', 'per_meter', 'per_time']),
+  distanceBasis: new Set(['none', 'indoor']),
+  coreRent: new Set(['none', 'by_contract'])
+});
+
+function resolvePermissionCalculationProfile(building) {
+  const buildingType = String(building?.type || '').trim().toUpperCase();
+  const typeFormula = PERMISSION_TYPE_FORMULAS[buildingType];
+  const buildingProfile = building?.permission_calculation
+    && typeof building.permission_calculation === 'object'
+    && building.permission_calculation.enabled !== false
+    ? building.permission_calculation
+    : null;
+
+  if (!typeFormula || typeFormula.enabled === false) {
+    return buildingProfile
+      ? { ...buildingProfile, _source: 'permission_calculation', _formulaType: null }
+      : null;
+  }
+
+  const chooseMode = (field, allowedField, fallback = 'none') => {
+    const allowedModes = new Set(
+      (Array.isArray(typeFormula[allowedField]) ? typeFormula[allowedField] : [fallback])
+        .map(value => String(value || fallback))
+    );
+    const requestedMode = String(buildingProfile?.[field] || typeFormula[field] || fallback);
+    return allowedModes.has(requestedMode) ? requestedMode : fallback;
+  };
+  const chooseConfiguredFields = field => {
+    const allowedFields = new Set(
+      Array.isArray(typeFormula[field]) ? typeFormula[field].map(value => String(value)) : []
+    );
+    const buildingFields = Array.isArray(buildingProfile?.[field])
+      ? buildingProfile[field].map(value => String(value))
+      : [];
+    return buildingFields.filter(value => allowedFields.has(value));
+  };
+
+  return {
+    ...typeFormula,
+    enabled: true,
+    version: Number(typeFormula.version || PERMISSION_TYPE_FORMULA_VERSION) || 1,
+    fixed_capex_fields: chooseConfiguredFields('fixed_capex_fields'),
+    refundable_fields: chooseConfiguredFields('refundable_fields'),
+    recurring_fields: chooseConfiguredFields('recurring_fields'),
+    horizontal_mode: chooseMode('horizontal_mode', 'allowed_horizontal_modes'),
+    horizontal_distance_basis: chooseMode(
+      'horizontal_distance_basis',
+      'allowed_horizontal_distance_bases',
+      'none'
+    ),
+    shaft_mode: chooseMode('shaft_mode', 'allowed_shaft_modes'),
+    fee_per_meter_basis: chooseMode('fee_per_meter_basis', 'allowed_fee_per_meter_bases'),
+    annual_fee_per_meter_basis: chooseMode(
+      'annual_fee_per_meter_basis',
+      'allowed_annual_fee_per_meter_bases'
+    ),
+    core_rent_mode: chooseMode('core_rent_mode', 'allowed_core_rent_modes'),
+    default_shaft_times: buildingProfile?.default_shaft_times ?? typeFormula.default_shaft_times,
+    default_circuit_count: buildingProfile?.default_circuit_count ?? typeFormula.default_circuit_count,
+    default_ot_nights: buildingProfile?.default_ot_nights ?? typeFormula.default_ot_nights,
+    default_contract_years: buildingProfile?.default_contract_years ?? typeFormula.default_contract_years,
+    _source: 'permission_type_formula',
+    _formulaType: buildingType
+  };
+}
+
+function hasEnabledPermissionCalculation(building) {
+  return Boolean(resolvePermissionCalculationProfile(building));
+}
+
+function getPermissionInputRequirements(building) {
+  const profile = resolvePermissionCalculationProfile(building);
+  if (!profile) return null;
+  const fixedFields = Array.isArray(profile.fixed_capex_fields) ? profile.fixed_capex_fields : [];
+  return {
+    profile,
+    needsShaftTimes: profile.shaft_mode === 'per_time',
+    needsCircuitCount: fixedFields.includes('circuit_activation_fee') || profile.core_rent_mode === 'by_contract',
+    needsOtNights: fixedFields.includes('ot_fee_per_night'),
+    needsContractYears: profile.core_rent_mode === 'by_contract'
+  };
+}
+
+function parseStrictPermissionNumber(building, field, dataIssues, warnings) {
+  const rawValue = building?.[field];
+  const isBlank = rawValue === null || rawValue === undefined || rawValue === '';
+  const isNumericString = typeof rawValue === 'string'
+    && /^-?(?:\d+\.?\d*|\.\d+)$/.test(rawValue.trim());
+  const value = typeof rawValue === 'number'
+    ? rawValue
+    : (isNumericString ? Number(rawValue) : Number.NaN);
+  if (isBlank || !Number.isFinite(value) || value < 0) {
+    const boqFallback = getBuildingBoqFeeAmount(building, field);
+    if (typeof boqFallback === 'number' && Number.isFinite(boqFallback) && boqFallback >= 0) {
+      warnings.push(`ฟิลด์ ${PERMISSION_FIELD_RULES[field]?.label || field} ใช้ค่าตัวเลขสำรองจาก BOQ`);
+      return boqFallback;
+    }
+    if (!isBlank) {
+      warnings.push(
+        `ฟิลด์ ${PERMISSION_FIELD_RULES[field]?.label || field} ไม่ใช่ค่าธรรมเนียมตัวเลข `
+        + 'จึงถือว่าอาคารนี้ไม่มีค่าธรรมเนียมรายการดังกล่าว'
+      );
+    }
+    return 0;
+  }
+  return value;
+}
+
+function validatePermissionMode(value, allowedModes, field, errors) {
+  const cleanValue = String(value || 'none');
+  if (allowedModes.has(cleanValue)) return cleanValue;
+  errors.push({ field, label: field, reason: `ไม่รองรับโหมด "${cleanValue}"` });
+  return 'none';
+}
+
+function resolveCoreRentField(contractYears) {
+  if (contractYears <= 1) return 'core_rent_per_month_1yr';
+  if (contractYears === 2) return 'core_rent_per_month_2yr';
+  return 'core_rent_per_month_3yr';
+}
+
+function calculatePermissionCost(building, inputs) {
+  const profile = resolvePermissionCalculationProfile(building);
+  if (!profile) return null;
+  const errors = [];
+  const dataIssues = [];
+  const warnings = [];
+  const payableItems = [];
+  const excludedItems = [];
+  const processedFields = new Set();
+
+  const addItem = ({ field, label, value, qty, cost_type = 'CAPEX', payable = true, period = null }) => {
+    if (!(value > 0)) return;
+    const resolvedCostType = period === 'monthly'
+      ? 'OPEX_MONTHLY'
+      : (period === 'annual' ? 'OPEX_ANNUAL' : cost_type);
+    const item = { field, label, value, qty, cost_type: resolvedCostType, payable, period };
+    (payable ? payableItems : excludedItems).push(item);
+  };
+
+  const addConfiguredField = (field, forcedCostType = null) => {
+    if (processedFields.has(field)) return;
+    const rule = PERMISSION_FIELD_RULES[field];
+    if (!rule) {
+      errors.push({ field, label: field, reason: 'ยังไม่มีกฎคำนวณกลางสำหรับฟิลด์นี้' });
+      return;
+    }
+    processedFields.add(field);
+    const rate = parseStrictPermissionNumber(building, field, dataIssues, warnings);
+    if (rate === null) return;
+    const multiplier = rule.multiplier ? Number(inputs[rule.multiplier]) : 1;
+    const value = rate * multiplier;
+    const qty = rule.multiplier
+      ? `${formatCurrencyNumeric(rate)} บาท × ${formatCurrencyNumeric(multiplier)} ${rule.unit}`
+      : `1 ครั้ง${rule.suffix || ''}`;
+    addItem({
+      field,
+      label: `${rule.label}${rule.suffix || ''}`,
+      value,
+      qty,
+      cost_type: forcedCostType || rule.cost_type,
+      payable: rule.payable !== false,
+      period: rule.suffix === '/เดือน' ? 'monthly' : (rule.suffix === '/ปี' ? 'annual' : null)
+    });
+  };
+
+  const fixedFields = Array.isArray(profile.fixed_capex_fields) ? profile.fixed_capex_fields : [];
+  const refundableFields = Array.isArray(profile.refundable_fields) ? profile.refundable_fields : [];
+  const recurringFields = Array.isArray(profile.recurring_fields) ? profile.recurring_fields : [];
+  fixedFields.forEach(field => addConfiguredField(field, 'CAPEX'));
+  refundableFields.forEach(field => addConfiguredField(field, 'DEPOSIT'));
+  recurringFields.forEach(field => addConfiguredField(field, 'OPEX'));
+
+  const horizontalMode = validatePermissionMode(
+    profile.horizontal_mode,
+    PERMISSION_FORMULA_MODES.horizontal,
+    'permission_calculation.horizontal_mode',
+    errors
+  );
+  const horizontalDistanceBasis = validatePermissionMode(
+    profile.horizontal_distance_basis,
+    PERMISSION_FORMULA_MODES.distanceBasis,
+    'permission_calculation.horizontal_distance_basis',
+    errors
+  );
+  if (horizontalMode === 'fixed') {
+    if (horizontalDistanceBasis !== 'indoor') {
+      errors.push({
+        field: 'permission_calculation.horizontal_distance_basis',
+        label: 'ฐานระยะ Horizontal',
+        reason: 'สูตรกลางรองรับโหมด fixed เมื่อฐานระยะเป็น indoor เท่านั้น'
+      });
+    }
+    const rate = parseStrictPermissionNumber(building, 'horizontal_fee', dataIssues, warnings);
+    if (rate !== null) {
+      addItem({
+        field: 'horizontal_fee',
+        label: `ค่าวางสายทั้งเส้น (${formatCurrencyNumeric(rate)} บ./ม. × ระยะรวม ${formatCurrencyNumeric(inputs.totalCableDistance)} ม.)`,
+        value: rate * inputs.totalCableDistance,
+        qty: `${formatCurrencyNumeric(inputs.totalCableDistance)} ม.`,
+        cost_type: 'CAPEX'
+      });
+    }
+  }
+
+  const shaftMode = validatePermissionMode(
+    profile.shaft_mode,
+    PERMISSION_FORMULA_MODES.shaft,
+    'permission_calculation.shaft_mode',
+    errors
+  );
+  const shaftRules = {
+    per_floor: { field: 'shaft_fee_per_floor', multiplier: inputs.floorCount, unit: 'ชั้น' },
+    per_meter: { field: 'shaft_fee_per_meter', multiplier: inputs.verticalDistance, unit: 'ม.' },
+    per_time: { field: 'shaft_fee_per_time', multiplier: inputs.shaftTimes, unit: 'ครั้ง' }
+  };
+  if (shaftRules[shaftMode]) {
+    const shaftRule = shaftRules[shaftMode];
+    const rate = parseStrictPermissionNumber(building, shaftRule.field, dataIssues, warnings);
+    if (rate !== null) {
+      addItem({
+        field: shaftRule.field,
+        label: `ค่า Shaft (${formatCurrencyNumeric(rate)} บาท/${shaftRule.unit} × ${formatCurrencyNumeric(shaftRule.multiplier)} ${shaftRule.unit})`,
+        value: rate * shaftRule.multiplier,
+        qty: `${formatCurrencyNumeric(shaftRule.multiplier)} ${shaftRule.unit}`,
+        cost_type: 'CAPEX'
+      });
+    }
+  }
+
+  const feePerMeterBasis = validatePermissionMode(
+    profile.fee_per_meter_basis,
+    PERMISSION_FORMULA_MODES.distanceBasis,
+    'permission_calculation.fee_per_meter_basis',
+    errors
+  );
+  if (feePerMeterBasis === 'indoor') {
+    const rate = parseStrictPermissionNumber(building, 'fee_per_meter', dataIssues, warnings);
+    if (rate !== null) {
+      addItem({
+        field: 'fee_per_meter',
+        label: `ค่าธรรมเนียมตามระยะภายในอาคาร (${formatCurrencyNumeric(rate)} บ./ม.)`,
+        value: rate * inputs.totalCableDistance,
+        qty: `${formatCurrencyNumeric(inputs.totalCableDistance)} ม.`,
+        cost_type: 'CAPEX'
+      });
+    }
+  }
+
+  const annualFeePerMeterBasis = validatePermissionMode(
+    profile.annual_fee_per_meter_basis,
+    PERMISSION_FORMULA_MODES.distanceBasis,
+    'permission_calculation.annual_fee_per_meter_basis',
+    errors
+  );
+  if (annualFeePerMeterBasis === 'indoor') {
+    const rate = parseStrictPermissionNumber(building, 'annual_fee_per_meter', dataIssues, warnings);
+    if (rate !== null) {
+      addItem({
+        field: 'annual_fee_per_meter',
+        label: `ค่าบริการรายปีตามระยะ (${formatCurrencyNumeric(rate)} บ./ม./ปี)`,
+        value: rate * inputs.totalCableDistance,
+        qty: `${formatCurrencyNumeric(inputs.totalCableDistance)} ม.`,
+        cost_type: 'OPEX',
+        period: 'annual'
+      });
+    }
+  }
+
+  const coreRentMode = validatePermissionMode(
+    profile.core_rent_mode,
+    PERMISSION_FORMULA_MODES.coreRent,
+    'permission_calculation.core_rent_mode',
+    errors
+  );
+  if (coreRentMode === 'by_contract') {
+    const preferredField = resolveCoreRentField(inputs.contractYears);
+    const preferredRawValue = building?.[preferredField];
+    const preferredValueMissing = preferredRawValue === null
+      || preferredRawValue === undefined
+      || preferredRawValue === '';
+    let rateField = preferredField;
+    let rate;
+    if (preferredValueMissing && building?.core_rent_per_month_contract !== null && building?.core_rent_per_month_contract !== undefined) {
+      rateField = 'core_rent_per_month_contract';
+      rate = parseStrictPermissionNumber(building, rateField, dataIssues, warnings);
+      warnings.push(`ไม่พบอัตรา Core สำหรับสัญญา ${inputs.contractYears} ปี จึงใช้อัตราตามสัญญาแทน`);
+    } else {
+      rate = parseStrictPermissionNumber(building, preferredField, dataIssues, warnings);
+    }
+    if (rate > 0) {
+      addItem({
+        field: rateField,
+        label: `ค่าเช่า Core รายเดือน (สัญญา ${inputs.contractYears} ปี)`,
+        value: rate * inputs.circuitCount,
+        qty: `${formatCurrencyNumeric(rate)} บาท × ${formatCurrencyNumeric(inputs.circuitCount)} Core`,
+        cost_type: 'OPEX',
+        period: 'monthly'
+      });
+    }
+  }
+
+  return {
+    source: profile._source,
+    formulaType: profile._formulaType,
+    version: Number(profile.version || building.permission_formula_version) || 1,
+    profile,
+    payableItems,
+    excludedItems,
+    errors,
+    dataIssues,
+    warnings
+  };
+}
+
 async function syncBuildingBoqProfiles({ skipConfirm = false, silent = false, refreshCostTypes = false } = {}) {
   if (!canManageUsers()) {
     alert('บัญชีนี้ไม่มีสิทธิ์สร้าง BOQ database');
@@ -4658,8 +5029,8 @@ function openBuildingEditor(record = null) {
   form.elements['coordination_fee'].value = getBuildingBoqFeeAmount(record, 'coordination_fee') ?? '';
   form.elements['shaft_fee_per_floor'].value = getBuildingBoqFeeAmount(record, 'shaft_fee_per_floor') ?? '';
   form.elements['horizontal_fee'].value = getBuildingBoqFeeAmount(record, 'horizontal_fee') ?? '';
-  BUILDING_CALCULATION_NUMBER_FIELDS.forEach(field => {
-    form.elements[`calc_${field}`].value = getStoredBuildingCalculationValue(record, field);
+  INSTALLATION_PROFILE_NUMBER_FIELDS.forEach(field => {
+    form.elements[`calc_${field}`].value = getStoredBuildingInstallationValue(record, field);
   });
   renderOtherFeeRows(getBuildingBoqOtherFees(record));
 
@@ -4723,7 +5094,7 @@ async function saveBuildingFromForm(form) {
   const existingRecord = existingId ? findBuildingById(existingId) : null;
   clearBuildingEditorInvalidState(form);
 
-  const invalidCalculationInput = BUILDING_CALCULATION_NUMBER_FIELDS
+  const invalidCalculationInput = INSTALLATION_PROFILE_NUMBER_FIELDS
     .map(field => form.elements[`calc_${field}`])
     .find(input => {
       if (!input || String(input.value).trim() === '') return false;
@@ -4789,10 +5160,11 @@ async function saveBuildingFromForm(form) {
     other_fees: collectOtherFees(),
     remark: String(formData.get('remark') || '').trim() || null
   });
-  payload.calculation_profile = buildBuildingCalculationProfile(
+  payload.installation_profile = buildBuildingInstallationProfile(
     formData,
-    existingRecord?.calculation_profile
+    existingRecord?.installation_profile || existingRecord?.calculation_profile
   );
+  delete payload.calculation_profile;
 
   if (!payload.name_th) {
     form.elements['name_th']?.classList.add('is-invalid');
@@ -4886,7 +5258,8 @@ function parseWmFloors(value) {
 function _updateQuotationDynamicInputs() {
   const building = window.currentBuildingData || {};
   const buildingName = building.name_th || building.name_eng || '';
-  const calculationProfile = getBuildingCalculationProfile(building);
+  const calculationProfile = getBuildingInstallationProfile(building);
+  const permissionRequirements = getPermissionInputRequirements(building);
 
   // Building info banner
   const infoBox = document.getElementById('quotation-building-info');
@@ -4900,11 +5273,14 @@ function _updateQuotationDynamicInputs() {
   const calculationProfileEl = document.getElementById('quotation-calculation-profile');
   if (calculationProfileEl) {
     calculationProfileEl.textContent =
-      `สูตรที่ใช้: ${formatCurrencyNumeric(calculationProfile.meters_per_floor)} ม./ชั้น • ` +
+      `ต้นทุนติดตั้ง: ${formatCurrencyNumeric(calculationProfile.meters_per_floor)} ม./ชั้น • ` +
       `ค่าสาย ${formatCurrencyNumeric(calculationProfile.cable_rate_per_meter)} บ./ม. • ` +
       `อุปกรณ์ ${formatCurrencyNumeric(calculationProfile.equipment_cost)} บ. • ` +
       `ODF ${formatCurrencyNumeric(calculationProfile.odf_cost)} บ. • ` +
-      `Splice ${formatCurrencyNumeric(calculationProfile.splice_cost)} บ.`;
+      `Splice ${formatCurrencyNumeric(calculationProfile.splice_cost)} บ. • ` +
+      (permissionRequirements
+        ? `Permission formula v${Number(permissionRequirements.profile.version) || 1}`
+        : 'Permission: BOQ fallback');
   }
 
   // Parse wm_point field
@@ -4955,6 +5331,45 @@ function _updateQuotationDynamicInputs() {
   hwireRateEl.textContent = hwireHints.join(' | ');
   hwireRateEl.style.color = hwireHints.length ? 'var(--yellow)' : 'var(--muted)';
 
+  const permissionPanel = document.getElementById('quotation-permission-inputs');
+  const permissionInputConfig = [
+    {
+      groupId: 'quotation-shaft-times-group',
+      inputId: 'quotation-shaft-times',
+      visible: permissionRequirements?.needsShaftTimes,
+      defaultValue: permissionRequirements?.profile.default_shaft_times ?? 1
+    },
+    {
+      groupId: 'quotation-circuit-count-group',
+      inputId: 'quotation-circuit-count',
+      visible: permissionRequirements?.needsCircuitCount,
+      defaultValue: permissionRequirements?.profile.default_circuit_count ?? 1
+    },
+    {
+      groupId: 'quotation-ot-nights-group',
+      inputId: 'quotation-ot-nights',
+      visible: permissionRequirements?.needsOtNights,
+      defaultValue: permissionRequirements?.profile.default_ot_nights ?? 0
+    },
+    {
+      groupId: 'quotation-contract-years-group',
+      inputId: 'quotation-contract-years',
+      visible: permissionRequirements?.needsContractYears,
+      defaultValue: permissionRequirements?.profile.default_contract_years ?? 1
+    }
+  ];
+  permissionInputConfig.forEach(config => {
+    const group = document.getElementById(config.groupId);
+    const input = document.getElementById(config.inputId);
+    if (group) group.style.display = config.visible ? 'block' : 'none';
+    if (input && config.visible && String(input.value).trim() === '') {
+      input.value = String(config.defaultValue);
+    }
+  });
+  if (permissionPanel) {
+    permissionPanel.style.display = permissionInputConfig.some(config => config.visible) ? 'block' : 'none';
+  }
+
   // Revenue inputs are quotation-specific because forecast revenue can change over time.
   const revenueShareFees = getBuildingBoqFees(building)
     .filter(item => item.payable && item.calculation_type === 'revenue_share');
@@ -4984,6 +5399,10 @@ const QUOTATION_STATE_IDS = [
   'quotation-wm-select',
   'quotation-wm-manual',
   'quotation-hwire',
+  'quotation-shaft-times',
+  'quotation-circuit-count',
+  'quotation-ot-nights',
+  'quotation-contract-years',
   'quotation-monthly-revenue',
   'quotation-annual-revenue'
 ];
@@ -5072,6 +5491,8 @@ function calculateQuotation() {
   const hwireInput = parseFloat(document.getElementById('quotation-hwire').value) || 0;
   const msgEl = document.getElementById('quotation-message');
   resetQuotationExportMessage();
+  window._quotationCalculated = false;
+  window.currentQuotationSnapshot = null;
 
   // Validate customer name
   if (!customerName) {
@@ -5139,8 +5560,35 @@ function calculateQuotation() {
     return;
   }
 
+  const permissionRequirements = getPermissionInputRequirements(building);
+  const readQuotationCountInput = (id, label, { min = 0 } = {}) => {
+    const input = document.getElementById(id);
+    const value = Number(input?.value);
+    if (!input || !Number.isFinite(value) || value < min || !Number.isInteger(value)) {
+      msgEl.className = 'error';
+      msgEl.innerHTML = iconText('x', `กรุณากรอก${label}เป็นจำนวนเต็มตั้งแต่ ${min} ขึ้นไป`);
+      msgEl.style.display = 'block';
+      input?.focus();
+      return null;
+    }
+    return value;
+  };
+  const shaftTimes = permissionRequirements?.needsShaftTimes
+    ? readQuotationCountInput('quotation-shaft-times', 'จำนวนครั้งที่ใช้ Shaft')
+    : Number(permissionRequirements?.profile.default_shaft_times ?? 1);
+  const circuitCount = permissionRequirements?.needsCircuitCount
+    ? readQuotationCountInput('quotation-circuit-count', 'จำนวนวงจร / Core', { min: 1 })
+    : Number(permissionRequirements?.profile.default_circuit_count ?? 1);
+  const otNights = permissionRequirements?.needsOtNights
+    ? readQuotationCountInput('quotation-ot-nights', 'จำนวนคืนที่ทำงานนอกเวลา')
+    : Number(permissionRequirements?.profile.default_ot_nights ?? 0);
+  const contractYears = permissionRequirements?.needsContractYears
+    ? readQuotationCountInput('quotation-contract-years', 'อายุสัญญา', { min: 1 })
+    : Number(permissionRequirements?.profile.default_contract_years ?? 1);
+  if ([shaftTimes, circuitCount, otNights, contractYears].some(value => value === null)) return;
+
   // ===== DISTANCE CALCULATION =====
-  const calculationProfile = getBuildingCalculationProfile(building);
+  const calculationProfile = getBuildingInstallationProfile(building);
   const metersPerFloor = calculationProfile.meters_per_floor;
   const verticalFloorCount = Math.abs(custFloor - wmFloor) + 1;
   const verticalDistance = verticalFloorCount * metersPerFloor;
@@ -5163,42 +5611,89 @@ function calculateQuotation() {
   const spliceCost = calculationProfile.splice_cost;
   const cableCost = totalCableDistance * cableRatePerMeter;
 
-  // Building fees
-  const shaftRatePerFloor = Number(getBuildingBoqFeeAmount(building, 'shaft_fee_per_floor')) || 0;
-  const cableRouteRatePerMeter = Number(getBuildingBoqFeeAmount(building, 'horizontal_fee')) || 0;
+  const permissionResult = calculatePermissionCost(building, {
+    floorCount: verticalFloorCount,
+    verticalDistance,
+    horizontalDistance: hwireInput,
+    totalCableDistance,
+    shaftTimes,
+    circuitCount,
+    otNights,
+    contractYears
+  });
+  if (permissionResult?.errors.length) {
+    const errorItems = permissionResult.errors
+      .map(item => `<li><strong>${esc(item.label)}</strong>: ${esc(item.reason)}</li>`)
+      .join('');
+    msgEl.className = 'error';
+    msgEl.innerHTML = `${iconText('x', 'ไม่สามารถคำนวณค่า Permission ได้ เนื่องจากข้อมูลอาคารไม่สมบูรณ์')}<ul style="margin:8px 0 0 20px;">${errorItems}</ul>`;
+    msgEl.style.display = 'block';
+    document.getElementById('quotation-distance-summary').style.display = 'none';
+    return;
+  }
+  const permissionDataIssues = permissionResult?.dataIssues || [];
+  const permissionWarnings = [
+    ...(permissionResult?.warnings || []),
+    ...permissionDataIssues.map(item => `${item.label}: ${item.reason}`)
+  ];
 
-  // Shaft uses the inclusive floor count. The cable-route fee covers the whole cable:
-  // calculated vertical distance plus the horizontal distance entered by the user.
-  const shaftTotal = shaftRatePerFloor > 0 ? shaftRatePerFloor * verticalFloorCount : 0;
-  const cableRouteFeeTotal = cableRouteRatePerMeter > 0 ? cableRouteRatePerMeter * totalCableDistance : 0;
+  let buildingFees;
+  let nonPayableFees;
+  if (permissionResult) {
+    buildingFees = permissionResult.payableItems;
+    nonPayableFees = permissionResult.excludedItems;
+  } else {
+    const fixedPayableFees = boqFees
+      .filter(item => item.payable && !['variable_fee', 'revenue_share'].includes(item.category))
+      .map(item => ({
+        field: item.source_field || item.key,
+        label: item.label,
+        value: item.amount,
+        qty: formatBuildingBoqFeeQuantity(item),
+        cost_type: item.cost_type
+      }));
+    nonPayableFees = boqFees
+      .filter(item => !item.payable && item.amount > 0)
+      .map(item => ({
+        field: item.source_field || item.key,
+        label: item.label,
+        value: item.amount,
+        qty: formatBuildingBoqFeeQuantity(item),
+        cost_type: item.cost_type
+      }));
+    const shaftRatePerFloor = Number(getBuildingBoqFeeAmount(building, 'shaft_fee_per_floor')) || 0;
+    const cableRouteRatePerMeter = Number(getBuildingBoqFeeAmount(building, 'horizontal_fee')) || 0;
+    buildingFees = [
+      ...fixedPayableFees,
+      {
+        field: 'shaft_fee_per_floor',
+        label: `ค่า Shaft (${formatCurrencyNumeric(shaftRatePerFloor)} บ./ชั้น × ${verticalFloorCount} ชั้น)`,
+        value: shaftRatePerFloor * verticalFloorCount,
+        qty: `${verticalFloorCount} ชั้น`,
+        cost_type: getBuildingBoqFee(building, 'shaft_fee_per_floor')?.cost_type || 'CAPEX',
+        hidden: shaftRatePerFloor === 0
+      },
+      {
+        field: 'horizontal_fee',
+        label: `ค่าวางสายทั้งเส้น (${formatCurrencyNumeric(cableRouteRatePerMeter)} บ./ม. × ระยะรวม ${formatCurrencyNumeric(totalCableDistance)} ม.)`,
+        value: cableRouteRatePerMeter * totalCableDistance,
+        qty: `${formatCurrencyNumeric(totalCableDistance)} ม.`,
+        cost_type: getBuildingBoqFee(building, 'horizontal_fee')?.cost_type || 'CAPEX',
+        hidden: cableRouteRatePerMeter === 0
+      }
+    ].filter(item => !item.hidden && item.value > 0);
+  }
 
-  // Show shaft info if applicable
   const shaftInfoEl = document.getElementById('quotation-shaft-info');
   const shaftSummaryEl = document.getElementById('quotation-shaft-summary');
-  if (shaftRatePerFloor > 0 && verticalFloorCount > 0) {
-    shaftSummaryEl.innerHTML =
-      `${svgIcon('alert')} ค่า Shaft: ${formatCurrencyNumeric(shaftRatePerFloor)} บ./ชั้น × ${verticalFloorCount} ชั้น = ${formatCurrencyNumeric(shaftTotal)} บาท`;
+  const shaftItem = buildingFees.find(item => String(item.field || '').startsWith('shaft_fee_'));
+  if (shaftItem) {
+    shaftSummaryEl.innerHTML = `${svgIcon('alert')} ${esc(shaftItem.label)} = ${formatCurrencyNumeric(shaftItem.value)} บาท`;
     shaftInfoEl.style.display = 'block';
   } else {
     shaftInfoEl.style.display = 'none';
   }
 
-  const fixedPayableFees = boqFees
-    .filter(item => item.payable && !['variable_fee', 'revenue_share'].includes(item.category))
-    .map(item => ({
-      label: item.label,
-      value: item.amount,
-      qty: formatBuildingBoqFeeQuantity(item),
-      cost_type: item.cost_type
-    }));
-  const nonPayableFees = boqFees
-    .filter(item => !item.payable && item.amount > 0)
-    .map(item => ({
-      label: item.label,
-      value: item.amount,
-      qty: formatBuildingBoqFeeQuantity(item),
-      cost_type: item.cost_type
-    }));
   const revenueShareFees = revenueShareFeeRules.map(item => {
     const rate = Number(item.rate) || 0;
     const isAnnual = item.revenue_period === 'annual';
@@ -5219,26 +5714,16 @@ function calculateQuotation() {
   const revenueShareMonthlyTotal = revenueShareFees.reduce((sum, item) => sum + item.monthlyValue, 0);
   const revenueShareAnnualTotal = revenueShareFees.reduce((sum, item) => sum + item.annualValue, 0);
 
-  const shaftFee = getBuildingBoqFee(building, 'shaft_fee_per_floor');
-  const horizontalFee = getBuildingBoqFee(building, 'horizontal_fee');
-
-  // ค่าใช้จ่ายประเภท variable_fee จะคำนวณตามจำนวนชั้นและระยะสาย ส่วนรายการอื่นใช้ยอดจาก BOQ โดยตรง
-  const buildingFees = [
-    ...fixedPayableFees,
-    { label: `ค่า Shaft (${formatCurrencyNumeric(shaftRatePerFloor)} บ./ชั้น × ${verticalFloorCount} ชั้น)`,
-      value: shaftTotal, qty: `${verticalFloorCount} ชั้น`, cost_type: shaftFee?.cost_type || 'CAPEX', hidden: shaftRatePerFloor === 0 || verticalFloorCount === 0 },
-    { label: `ค่าวางสายทั้งเส้น (${formatCurrencyNumeric(cableRouteRatePerMeter)} บ./ม. × ระยะรวม ${totalCableDistance} ม.)`,
-      value: cableRouteFeeTotal, qty: `${totalCableDistance} ม.`, cost_type: horizontalFee?.cost_type || 'CAPEX', hidden: cableRouteRatePerMeter === 0 }
-  ].filter(f => !f.hidden && f.value > 0);
-
   const installationSubtotal = cableCost + equipmentCost + odfCost + spliceCost;
   const costTypeLabels = {
     CAPEX: 'CAPEX',
     OPEX: 'OPEX',
+    OPEX_MONTHLY: 'OPEX รายเดือน',
+    OPEX_ANNUAL: 'OPEX รายปี',
     DEPOSIT: 'Deposit ที่ต้องชำระ',
     UNCLASSIFIED: 'ยังไม่จัดประเภท'
   };
-  const payableGroups = ['CAPEX', 'OPEX', 'DEPOSIT', 'UNCLASSIFIED']
+  const payableGroups = ['CAPEX', 'OPEX', 'OPEX_MONTHLY', 'OPEX_ANNUAL', 'DEPOSIT', 'UNCLASSIFIED']
     .map(costType => ({
       costType,
       label: costTypeLabels[costType],
@@ -5251,6 +5736,8 @@ function calculateQuotation() {
   const buildingCapexTotal = payableGroups.find(group => group.costType === 'CAPEX')?.total || 0;
   const capexTotal = installationSubtotal + buildingCapexTotal;
   const opexTotal = payableGroups.find(group => group.costType === 'OPEX')?.total || 0;
+  const monthlyOpexTotal = payableGroups.find(group => group.costType === 'OPEX_MONTHLY')?.total || 0;
+  const annualOpexTotal = payableGroups.find(group => group.costType === 'OPEX_ANNUAL')?.total || 0;
   const depositPayableTotal = payableGroups.find(group => group.costType === 'DEPOSIT')?.total || 0;
   const unclassifiedPayableTotal = payableGroups.find(group => group.costType === 'UNCLASSIFIED')?.total || 0;
   const nonPayableTotal = nonPayableFees.reduce((sum, item) => sum + item.value, 0);
@@ -5264,6 +5751,19 @@ function calculateQuotation() {
   document.getElementById('quotation-installation-subtotal').textContent = formatCurrency(installationSubtotal);
 
   const buildingFeesContainer = document.getElementById('quotation-building-fees');
+  const permissionFormulaHtml = `
+      <div class="quotation-calc-section">
+        <span>สูตร Permission</span>
+        <span>${permissionResult
+          ? `${permissionResult.formulaType
+              ? `สูตรกลาง ${permissionResult.formulaType}`
+              : 'สูตรรายอาคาร'} v${permissionResult.version}${permissionDataIssues.length ? ' • ผลบางส่วน' : ''}`
+          : 'BOQ fallback'}</span>
+      </div>
+      ${permissionWarnings.length ? `
+        <div style="color:var(--yellow);font-size:11px;line-height:1.6;margin:8px 0;">
+          ${permissionWarnings.map(warning => `• ${esc(warning)}`).join('<br>')}
+        </div>` : ''}`;
   const buildingFeesHtml = payableGroups.filter(group => group.total > 0).map(group => `
       <div class="quotation-calc-section">
         <span>${esc(group.label)}</span>
@@ -5288,11 +5788,13 @@ function calculateQuotation() {
       <div class="quotation-cost-breakdown">
         <div><span>CAPEX รวม</span><strong>${formatCurrency(capexTotal)}</strong></div>
         <div><span>OPEX รวม</span><strong>${formatCurrency(opexTotal)}</strong></div>
+        ${monthlyOpexTotal > 0 ? `<div><span>OPEX รายเดือน (ไม่รวมยอดเริ่มต้น)</span><strong>${formatCurrency(monthlyOpexTotal)}/เดือน</strong></div>` : ''}
+        ${annualOpexTotal > 0 ? `<div><span>OPEX รายปี (ไม่รวมยอดเริ่มต้น)</span><strong>${formatCurrency(annualOpexTotal)}/ปี</strong></div>` : ''}
         ${depositPayableTotal > 0 ? `<div><span>Deposit ที่ต้องชำระ</span><strong>${formatCurrency(depositPayableTotal)}</strong></div>` : ''}
         ${unclassifiedPayableTotal > 0 ? `<div><span>ยังไม่จัดประเภท</span><strong>${formatCurrency(unclassifiedPayableTotal)}</strong></div>` : ''}
         ${nonPayableTotal > 0 ? `<div class="excluded"><span>รายการไม่นำไปรวม</span><strong>${formatCurrency(nonPayableTotal)}</strong></div>` : ''}
       </div>`;
-  buildingFeesContainer.innerHTML = buildingFeesHtml + nonPayableFeesHtml + costBreakdownHtml;
+  buildingFeesContainer.innerHTML = permissionFormulaHtml + buildingFeesHtml + nonPayableFeesHtml + costBreakdownHtml;
 
   const revenueShareSummaryEl = document.getElementById('quotation-revenue-share-summary');
   revenueShareSummaryEl.innerHTML = revenueShareFees.length ? `
@@ -5310,11 +5812,64 @@ function calculateQuotation() {
         <div><span>รวมส่วนแบ่งต่อปี</span><strong>${formatCurrency(revenueShareAnnualTotal)}</strong></div>
       </div>` : '';
 
-  document.getElementById('quotation-total-label').textContent = revenueShareFees.length
-    ? 'ยอดค่าใช้จ่ายคงที่/เริ่มต้น'
-    : 'ยอดรวมที่ต้องชำระ';
+  document.getElementById('quotation-total-label').textContent =
+    permissionDataIssues.length
+      ? 'ยอดประเมินจากข้อมูลที่คำนวณได้'
+      : revenueShareFees.length || monthlyOpexTotal > 0 || annualOpexTotal > 0
+      ? 'ยอดเริ่มต้นที่ต้องชำระ'
+      : 'ยอดรวมที่ต้องชำระ';
 
   document.getElementById('quotation-total-cost').textContent = formatCurrency(totalCost);
+  window.currentQuotationSnapshot = {
+    created_at: new Date().toISOString(),
+    building_id: building.id ?? building._docId ?? null,
+    installation_profile: { ...calculationProfile },
+    permission_formula: permissionResult
+      ? {
+          source: permissionResult.source,
+          formula_type: permissionResult.formulaType,
+          version: permissionResult.version,
+          profile: {
+            fixed_capex_fields: [...(permissionResult.profile.fixed_capex_fields || [])],
+            refundable_fields: [...(permissionResult.profile.refundable_fields || [])],
+            recurring_fields: [...(permissionResult.profile.recurring_fields || [])],
+            horizontal_mode: permissionResult.profile.horizontal_mode || 'none',
+            horizontal_distance_basis: permissionResult.profile.horizontal_distance_basis || 'none',
+            shaft_mode: permissionResult.profile.shaft_mode || 'none',
+            fee_per_meter_basis: permissionResult.profile.fee_per_meter_basis || 'none',
+            annual_fee_per_meter_basis: permissionResult.profile.annual_fee_per_meter_basis || 'none',
+            core_rent_mode: permissionResult.profile.core_rent_mode || 'none'
+          },
+          payable_items: permissionResult.payableItems.map(item => ({ ...item })),
+          excluded_items: permissionResult.excludedItems.map(item => ({ ...item })),
+          complete: permissionDataIssues.length === 0,
+          data_issues: permissionDataIssues.map(item => ({ ...item })),
+          warnings: permissionResult.warnings.map(item => String(item))
+        }
+      : { source: 'boq_fallback', version: null },
+    inputs: {
+      wm_floor: wmFloor,
+      customer_floor: custFloor,
+      floor_count: verticalFloorCount,
+      vertical_distance: verticalDistance,
+      horizontal_distance: hwireInput,
+      total_cable_distance: totalCableDistance,
+      shaft_times: shaftTimes,
+      circuit_count: circuitCount,
+      ot_nights: otNights,
+      contract_years: contractYears
+    },
+    totals: {
+      installation: installationSubtotal,
+      capex: capexTotal,
+      opex: opexTotal,
+      opex_monthly: monthlyOpexTotal,
+      opex_annual: annualOpexTotal,
+      payable_deposit: depositPayableTotal,
+      excluded: nonPayableTotal,
+      payable_total: totalCost
+    }
+  };
 
   // ===== UPDATE PREVIEW =====
   const permissionDurationText = formatPermissionDuration(building.duration);
@@ -5380,25 +5935,40 @@ function calculateQuotation() {
   prevBuildingFeesContainer.innerHTML = buildingFeesPreviewHtml + nonPayableFeesPreviewHtml + revenueShareFeesPreviewHtml;
 
   document.getElementById('prev-cost-breakdown').innerHTML = `
+    <div><span>สูตร Permission</span><strong>${permissionResult
+      ? `${permissionResult.formulaType
+          ? `สูตรกลาง ${permissionResult.formulaType}`
+          : 'สูตรรายอาคาร'} v${permissionResult.version}${permissionDataIssues.length ? ' • ผลบางส่วน' : ''}`
+      : 'BOQ fallback'}</strong></div>
+    ${permissionDataIssues.length ? `<div style="display:block;color:#b45309;"><span>คำเตือนข้อมูล</span><strong style="display:block;margin-top:4px;">${permissionDataIssues.map(item => `${esc(item.label)}: ${esc(item.reason)}`).join('<br>')}</strong></div>` : ''}
     <div><span>CAPEX รวม</span><strong>${formatCurrencyNumeric(capexTotal)} บาท</strong></div>
     <div><span>OPEX รวม</span><strong>${formatCurrencyNumeric(opexTotal)} บาท</strong></div>
+    ${monthlyOpexTotal > 0 ? `<div><span>OPEX รายเดือน (ไม่รวมยอดเริ่มต้น)</span><strong>${formatCurrencyNumeric(monthlyOpexTotal)} บาท/เดือน</strong></div>` : ''}
+    ${annualOpexTotal > 0 ? `<div><span>OPEX รายปี (ไม่รวมยอดเริ่มต้น)</span><strong>${formatCurrencyNumeric(annualOpexTotal)} บาท/ปี</strong></div>` : ''}
     ${depositPayableTotal > 0 ? `<div><span>Deposit ที่ต้องชำระ</span><strong>${formatCurrencyNumeric(depositPayableTotal)} บาท</strong></div>` : ''}
     ${unclassifiedPayableTotal > 0 ? `<div><span>ยังไม่จัดประเภท</span><strong>${formatCurrencyNumeric(unclassifiedPayableTotal)} บาท</strong></div>` : ''}
     ${nonPayableTotal > 0 ? `<div class="excluded"><span>รายการไม่นำมาคำนวณ</span><strong>${formatCurrencyNumeric(nonPayableTotal)} บาท</strong></div>` : ''}`;
   document.getElementById('prev-revenue-share-summary').innerHTML = revenueShareFees.length ? `
     <div><span>ส่วนแบ่งรายได้เฉลี่ยต่อเดือน</span><strong>${formatCurrencyNumeric(revenueShareMonthlyTotal)} บาท</strong></div>
     <div><span>ส่วนแบ่งรายได้ต่อปี</span><strong>${formatCurrencyNumeric(revenueShareAnnualTotal)} บาท</strong></div>` : '';
-  document.getElementById('prev-total-label').textContent = revenueShareFees.length
-    ? 'ยอดค่าใช้จ่ายคงที่/เริ่มต้น'
-    : 'ยอดรวมที่ต้องชำระ';
+  document.getElementById('prev-total-label').textContent =
+    permissionDataIssues.length
+      ? 'ยอดประเมินจากข้อมูลที่คำนวณได้'
+      : revenueShareFees.length || monthlyOpexTotal > 0 || annualOpexTotal > 0
+      ? 'ยอดเริ่มต้นที่ต้องชำระ'
+      : 'ยอดรวมที่ต้องชำระ';
   document.getElementById('prev-total').textContent = formatCurrencyNumeric(totalCost) + ' บาท';
 
   window._quotationCalculated = true;
   window._quotationLastCustomer = customerName;
-  msgEl.className = 'success';
-  msgEl.innerHTML = iconText('check', 'คำนวณสำเร็จ');
+  msgEl.className = permissionDataIssues.length ? 'error' : 'success';
+  msgEl.innerHTML = permissionDataIssues.length
+    ? iconText('alert', `คำนวณสำเร็จเฉพาะรายการที่มีข้อมูลถูกต้อง — ข้าม ${permissionDataIssues.length} รายการที่ต้องยืนยันกับเจ้าของข้อมูล`)
+    : iconText('check', 'คำนวณสำเร็จ');
   msgEl.style.display = 'block';
-  setTimeout(() => msgEl.style.display = 'none', 3000);
+  if (!permissionDataIssues.length) {
+    setTimeout(() => msgEl.style.display = 'none', 3000);
+  }
 }
 
 // Generate PDF
@@ -5550,7 +6120,7 @@ function resetQuotationForm(options = {}) {
   const buildingData = Object.prototype.hasOwnProperty.call(options, 'buildingData')
     ? options.buildingData
     : (window.currentBuildingData || {});
-  const calculationProfile = getBuildingCalculationProfile(buildingData);
+  const calculationProfile = getBuildingInstallationProfile(buildingData);
   const baseInstallationCost = calculationProfile.equipment_cost
     + calculationProfile.odf_cost
     + calculationProfile.splice_cost;
@@ -5558,6 +6128,10 @@ function resetQuotationForm(options = {}) {
   document.getElementById('quotation-customer').value = '';
   document.getElementById('quotation-cust-floor').value = '';
   document.getElementById('quotation-hwire').value = '';
+  document.getElementById('quotation-shaft-times').value = '';
+  document.getElementById('quotation-circuit-count').value = '';
+  document.getElementById('quotation-ot-nights').value = '';
+  document.getElementById('quotation-contract-years').value = '';
   document.getElementById('quotation-monthly-revenue').value = '';
   document.getElementById('quotation-annual-revenue').value = '';
   document.getElementById('quotation-wm-manual').value = '';
@@ -5595,6 +6169,7 @@ function resetQuotationForm(options = {}) {
   document.getElementById('prev-total-label').textContent = 'ยอดรวมที่ต้องชำระ';
   document.getElementById('prev-total').textContent = '-';
   window._quotationCalculated = false;
+  window.currentQuotationSnapshot = null;
   window.currentBuildingData = buildingData || {};
   _updateQuotationDynamicInputs();
 }
@@ -6043,6 +6618,26 @@ document.addEventListener('DOMContentLoaded', function() {
         <small id="quotation-hwire-rate" style="color:var(--muted);font-size:11px;margin-top:3px;display:block;"></small>
       </div>
 
+      <div id="quotation-permission-inputs" class="quotation-permission-panel">
+        <div class="quotation-permission-panel-title">ข้อมูลประกอบสูตร Permission ของอาคาร</div>
+        <div id="quotation-shaft-times-group" class="quotation-form-group" style="display:none;">
+          <label for="quotation-shaft-times">จำนวนครั้งที่ใช้ Shaft *</label>
+          <input type="number" id="quotation-shaft-times" min="0" step="1">
+        </div>
+        <div id="quotation-circuit-count-group" class="quotation-form-group" style="display:none;">
+          <label for="quotation-circuit-count">จำนวนวงจร / Core *</label>
+          <input type="number" id="quotation-circuit-count" min="1" step="1">
+        </div>
+        <div id="quotation-ot-nights-group" class="quotation-form-group" style="display:none;">
+          <label for="quotation-ot-nights">จำนวนคืนที่ทำงานนอกเวลา *</label>
+          <input type="number" id="quotation-ot-nights" min="0" step="1">
+        </div>
+        <div id="quotation-contract-years-group" class="quotation-form-group" style="display:none;">
+          <label for="quotation-contract-years">อายุสัญญา (ปี) *</label>
+          <input type="number" id="quotation-contract-years" min="1" step="1">
+        </div>
+      </div>
+
       <div id="quotation-revenue-panel" class="quotation-revenue-panel">
         <div class="quotation-revenue-panel-title">รายได้สำหรับคำนวณส่วนแบ่ง</div>
         <div id="quotation-monthly-revenue-group" class="quotation-form-group" style="display:none;">
@@ -6311,7 +6906,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="building-field"><label>ค่าธรรมเนียมประสานงาน (Coordination Fee)</label><input name="coordination_fee" type="number" step="0.01" min="0"></div>
         <div class="building-field"><label>ค่า Shaft ต่อชั้น</label><input name="shaft_fee_per_floor" type="number" step="0.01" min="0"></div>
         <div class="building-field"><label>ค่าวางสายทั้งเส้น /ม.</label><input name="horizontal_fee" type="number" step="0.01" min="0"></div>
-        <div class="building-editor-section">สูตรคำนวณเฉพาะอาคาร</div>
+        <div class="building-editor-section">สูตรต้นทุนติดตั้งเฉพาะอาคาร</div>
         <div class="building-field"><label>ระยะแนวตั้งต่อชั้น (ม.)</label><input name="calc_meters_per_floor" type="number" step="0.01" min="0.01" placeholder="ค่าเริ่มต้น 5"><small>เว้นว่างเพื่อใช้ค่าเริ่มต้นกลาง 5 เมตร/ชั้น</small></div>
         <div class="building-field"><label>ค่าติดตั้งสาย OFC ต่อเมตร</label><input name="calc_cable_rate_per_meter" type="number" step="0.01" min="0" placeholder="ค่าเริ่มต้น 158.36"><small>คูณระยะสายรวมทั้งแนวตั้งและแนวนอน</small></div>
         <div class="building-field"><label>ค่าติดตั้งอุปกรณ์</label><input name="calc_equipment_cost" type="number" step="0.01" min="0" placeholder="ค่าเริ่มต้น 2,200"></div>
