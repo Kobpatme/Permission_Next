@@ -780,6 +780,7 @@ select.flt.active{
   flex:1;
   padding:9px 14px; font-size:12.5px; font-weight:600;
   cursor:pointer; color:var(--text2);
+  border:0; background:transparent; font-family:inherit;
   border-radius:7px;
   transition:all .18s; white-space:nowrap; letter-spacing:.2px;
   text-align:center;
@@ -1192,6 +1193,17 @@ select.flt.active{
 /* FOCUS */
 :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:6px;}
 button:focus-visible, select:focus-visible, input:focus-visible{outline:2px solid var(--accent); outline-offset:2px;}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    scroll-behavior:auto !important;
+    animation-duration:.01ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:.01ms !important;
+  }
+  #auth-particles{display:none;}
+  .auth-card{transform:none !important;}
+}
 
 /* SCROLLBAR */
 ::-webkit-scrollbar{width:6px; height:6px;}
@@ -2285,7 +2297,7 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
         </div>
         <div class="auth-divider" aria-hidden="true"></div>
         <button class="auth-submit" type="submit">เข้าสู่ระบบ</button>
-        <div class="auth-message" id="login-message"></div>
+        <div class="auth-message" id="login-message" role="alert" aria-live="assertive"></div>
       </div>
     </form>
   </div>
@@ -2322,24 +2334,24 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
   <button id="filter-toggle" type="button" aria-expanded="true"><svg class="svg-icon chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg><span class="filter-toggle-text">ตัวกรอง</span></button>
   <div class="filter-controls">
     <span class="filter-label">กรอง:</span>
-    <select class="flt" id="f-status">
+    <select class="flt" id="f-status" aria-label="กรองตามสถานะ">
       <option value="">Status ทั้งหมด</option>
       <option>Permission Confirmed</option>
       <option>MOU</option>
       <option>Check Permission</option>
       <option>อาคารปิดถาวร</option>
     </select>
-    <select class="flt" id="f-group">
+    <select class="flt" id="f-group" aria-label="กรองตามกลุ่ม">
       <option value="">Group ทั้งหมด</option>
       <option>Priority 1</option>
       <option>Priority 2</option>
       <option value="X">X</option>
     </select>
-    <select class="flt" id="f-type">
+    <select class="flt" id="f-type" aria-label="กรองตามประเภท">
       <option value="">Type ทั้งหมด</option>
       <option>L1</option><option>L2</option><option>L3</option>
     </select>
-    <select class="flt" id="f-install">
+    <select class="flt" id="f-install" aria-label="กรองตามรูปแบบการติดตั้ง">
       <option value="">Install ทั้งหมด</option>
       <option>Building</option>
       <option>Shopping Mall</option>
@@ -2349,14 +2361,14 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
       <option>Port</option>
       <option>Market</option>
     </select>
-    <select class="flt" id="f-survey">
+    <select class="flt" id="f-survey" aria-label="กรองตามประเภทการสำรวจ">
       <option value="">Survey ทั้งหมด</option>
       <option>Auto</option>
       <option>Need Survey</option>
       <option>Need Mark</option>
       <option>Wait Check</option>
     </select>
-    <select class="flt" id="f-area">
+    <select class="flt" id="f-area" aria-label="กรองตามพื้นที่">
       <option value="">Area ทั้งหมด</option>
       <option>BKK1</option><option>BKK2</option><option>BKK3</option><option>BKK4</option>
       <option>CMI</option><option>CBI</option><option>RYG</option><option>PKT</option><option>SNI</option>
@@ -2365,7 +2377,7 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
   </div>
   <div class="search-wrap">
     <span class="search-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
-    <input id="search-input" type="text" placeholder="ค้นหาอาคาร... ภาษาไทย หรือ English" autocomplete="off"/>
+    <input id="search-input" type="text" placeholder="ค้นหาอาคาร... ภาษาไทย หรือ English" autocomplete="off" aria-label="ค้นหาอาคาร"/>
     <button id="search-clear" title="ล้างการค้นหา"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
     <div id="autocomplete"></div>
   </div>
@@ -2375,7 +2387,7 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 <!-- MAIN -->
 <div id="main">
   <div id="map-wrap">
-    <div id="map"></div>
+    <div id="map" role="application" aria-label="แผนที่แสดงตำแหน่งอาคาร"></div>
     <div class="map-mode-toggle" id="map-mode-toggle" aria-label="Map mode">
       <button type="button" class="active" data-mode="map">แผนที่</button>
       <button type="button" data-mode="satellite">ดาวเทียม</button>
@@ -2442,7 +2454,7 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 
     <!-- DETAIL DRAWER -->
     <div id="drawer-overlay"></div>
-<div id="detail-drawer">
+<div id="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="d-title" aria-hidden="true">
       <div id="drawer-header">
         <div class="d-title" id="d-title">—</div>
         <div class="d-eng" id="d-eng"></div>
@@ -2450,14 +2462,14 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
         <button id="drawer-close" title="ปิด"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
       </div>
       <div id="drawer-body">
-        <div class="drawer-tabs" id="drawer-tabs">
-          <div class="dtab active" data-tab="general">ทั่วไป</div>
-          <div class="dtab" data-tab="contact">ติดต่อ</div>
-          <div class="dtab" data-tab="fee">ค่าธรรมเนียม</div>
+        <div class="drawer-tabs" id="drawer-tabs" role="tablist" aria-label="รายละเอียดอาคาร">
+          <button class="dtab active" id="drawer-tab-general" type="button" role="tab" aria-selected="true" aria-controls="tab-general" data-tab="general">ทั่วไป</button>
+          <button class="dtab" id="drawer-tab-contact" type="button" role="tab" aria-selected="false" aria-controls="tab-contact" data-tab="contact">ติดต่อ</button>
+          <button class="dtab" id="drawer-tab-fee" type="button" role="tab" aria-selected="false" aria-controls="tab-fee" data-tab="fee">ค่าธรรมเนียม</button>
         </div>
-        <div class="tab-panel active" id="tab-general"></div>
-        <div class="tab-panel" id="tab-contact"></div>
-        <div class="tab-panel" id="tab-fee"></div>
+        <div class="tab-panel active" id="tab-general" role="tabpanel" aria-labelledby="drawer-tab-general"></div>
+        <div class="tab-panel" id="tab-contact" role="tabpanel" aria-labelledby="drawer-tab-contact" hidden></div>
+        <div class="tab-panel" id="tab-fee" role="tabpanel" aria-labelledby="drawer-tab-fee" hidden></div>
       </div>
     </div>
   </div>
@@ -2672,6 +2684,18 @@ const RAW_DATA = [];
 const CHECK_PERMISSION_STALE_DAYS = 365;
 const CHECK_PERMISSION_EXCLUDED_STATUSES = new Set(['Check Permission', 'MOU', 'อาคารปิดถาวร']);
 
+function makeValidatedLocalDate(year, month, day) {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  const date = new Date(year, month - 1, day);
+  if (
+    Number.isNaN(date.getTime())
+    || date.getFullYear() !== year
+    || date.getMonth() !== month - 1
+    || date.getDate() !== day
+  ) return null;
+  return date;
+}
+
 function parseBuildingUpdateDate(value) {
   if (!value) return null;
   if (typeof value.toDate === 'function') {
@@ -2688,8 +2712,7 @@ function parseBuildingUpdateDate(value) {
     const year = Number(isoDate[1]);
     const month = Number(isoDate[2]);
     const day = Number(isoDate[3]);
-    const date = new Date(year, month - 1, day);
-    return Number.isNaN(date.getTime()) ? null : date;
+    return makeValidatedLocalDate(year, month, day);
   }
 
   const slashDate = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
@@ -2699,8 +2722,7 @@ function parseBuildingUpdateDate(value) {
     let year = Number(slashDate[3]);
     if (year < 100) year += 2000;
     if (year > 2400) year -= 543;
-    const date = new Date(year, month - 1, day);
-    return Number.isNaN(date.getTime()) ? null : date;
+    return makeValidatedLocalDate(year, month, day);
   }
 
   const parsed = new Date(raw);
@@ -2810,7 +2832,8 @@ const BUILDING_CSV_COLUMNS = [
   ['annual_fee', 'ค่าบริการรายปี (Annual Fee)'],
   ['coordination_fee', 'ค่าธรรมเนียมประสานงาน (Coordination Fee)'],
   ['shaft_fee_per_floor', 'ค่า Shaft ต่อชั้น'],
-  ['horizontal_fee', 'ค่าวางสาย Horizontal /ม.'],
+  ['horizontal_fee', 'ค่าวางสายทั้งเส้น /ม.'],
+  ['calculation_profile', 'สูตรคำนวณเฉพาะอาคาร'],
   ['other_fees', 'ค่าใช้จ่ายเพิ่มเติม'],
   ['duration', 'ระยะ Permission'],
   ['update_date', 'อัปเดตล่าสุด'],
@@ -2916,6 +2939,16 @@ function setBoxMessage(id, message, isError = true) {
   box.style.background = isError ? 'var(--red-bg)' : 'var(--green-bg)';
   box.style.borderColor = isError ? 'rgba(239,68,68,.24)' : 'rgba(16,185,129,.24)';
   box.classList.toggle('show', Boolean(message));
+}
+
+function applyFieldAriaLabels(root = document) {
+  root.querySelectorAll('.building-field').forEach(field => {
+    const label = field.querySelector('label');
+    const control = field.querySelector('input, select, textarea');
+    if (!label || !control || control.hasAttribute('aria-label') || control.hasAttribute('aria-labelledby')) return;
+    const labelText = label.textContent.replace(/\s*\*\s*$/, '').trim();
+    if (labelText) control.setAttribute('aria-label', labelText);
+  });
 }
 
 async function sha256(text) {
@@ -3084,6 +3117,51 @@ function editUser(email) {
 }
 
 const UNSAVED_CHANGES_CONFIRM_MESSAGE = 'มีข้อมูลที่ยังไม่ได้บันทึก ต้องการปิดหน้าต่างและทิ้งข้อมูลนี้หรือไม่?';
+const dialogFocusReturn = new WeakMap();
+
+function openDialogAccessibility(dialog, initialFocus = null) {
+  if (!dialog) return;
+  if (document.activeElement instanceof HTMLElement) {
+    dialogFocusReturn.set(dialog, document.activeElement);
+  }
+  dialog.setAttribute('aria-hidden', 'false');
+  requestAnimationFrame(() => {
+    const target = initialFocus || dialog.querySelector(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    target?.focus();
+  });
+}
+
+function closeDialogAccessibility(dialog) {
+  if (!dialog) return;
+  dialog.setAttribute('aria-hidden', 'true');
+  const returnTarget = dialogFocusReturn.get(dialog);
+  if (returnTarget?.isConnected) returnTarget.focus();
+  dialogFocusReturn.delete(dialog);
+}
+
+function trapDialogTabKey(event) {
+  if (event.key !== 'Tab') return;
+  const dialogs = [...document.querySelectorAll('[role="dialog"].open[aria-hidden="false"]')];
+  if (!dialogs.length) return;
+  const dialog = dialogs.reduce((top, candidate) =>
+    Number(getComputedStyle(candidate).zIndex) > Number(getComputedStyle(top).zIndex) ? candidate : top
+  );
+  const focusable = [...dialog.querySelectorAll(
+    'button:not([disabled]):not([hidden]), input:not([disabled]):not([hidden]), select:not([disabled]):not([hidden]), textarea:not([disabled]):not([hidden]), [tabindex]:not([tabindex="-1"])'
+  )].filter(el => el.getClientRects().length);
+  if (!focusable.length) return;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
 
 function serializeFormState(form) {
   if (!form) return '';
@@ -3115,6 +3193,7 @@ function closeUserAdminModal(force = false) {
   if (!modal) return true;
   if (!force && !confirmDiscardFormChanges(form)) return false;
   modal.classList.remove('open');
+  closeDialogAccessibility(modal);
   resetUserForm();
   return true;
 }
@@ -3153,12 +3232,13 @@ async function saveUserFromForm(form) {
   };
   if (!existing) payload.created_at = new Date().toISOString();
   if (password) payload.password_hash = await passwordHash(email, password);
+  const nextUser = existing ? { ...existing, ...payload, email } : payload;
 
   if (editingEmail && editingEmail !== email) {
-    await window.FSDB.setUser(email, { ...existing, ...payload, email });
+    await window.FSDB.setUser(email, nextUser);
     await window.FSDB.deleteUser(editingEmail);
   } else {
-    await window.FSDB.setUser(email, payload);
+    await window.FSDB.setUser(email, nextUser);
   }
   resetUserForm();
   setBoxMessage('user-admin-message', 'บันทึกผู้ใช้เรียบร้อยแล้ว', false);
@@ -3698,13 +3778,36 @@ function openDrawer(r) {
 window.openDrawer = openDrawer;
 
 function switchTab(name) {
-  document.querySelectorAll('.dtab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-'+name));
+  document.querySelectorAll('.dtab').forEach(t => {
+    const active = t.dataset.tab === name;
+    t.classList.toggle('active', active);
+    t.setAttribute('aria-selected', String(active));
+    t.tabIndex = active ? 0 : -1;
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    const active = p.id === 'tab-'+name;
+    p.classList.toggle('active', active);
+    p.hidden = !active;
+  });
 }
 
 document.getElementById('drawer-tabs').addEventListener('click', e => {
   const tab = e.target.closest('.dtab');
   if (tab) switchTab(tab.dataset.tab);
+});
+document.getElementById('drawer-tabs').addEventListener('keydown', e => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  const tabs = [...e.currentTarget.querySelectorAll('[role="tab"]')];
+  const currentIndex = tabs.indexOf(document.activeElement);
+  if (currentIndex < 0) return;
+  e.preventDefault();
+  let nextIndex = currentIndex;
+  if (e.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  if (e.key === 'ArrowRight') nextIndex = (currentIndex + 1) % tabs.length;
+  if (e.key === 'Home') nextIndex = 0;
+  if (e.key === 'End') nextIndex = tabs.length - 1;
+  switchTab(tabs[nextIndex].dataset.tab);
+  tabs[nextIndex].focus();
 });
 document.getElementById('tab-general').addEventListener('click', e => {
   const copyBtn = e.target.closest('.copy-coord-btn');
@@ -4018,6 +4121,69 @@ function toNullableNumber(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+const DEFAULT_BUILDING_CALCULATION_PROFILE = Object.freeze({
+  version: 1,
+  meters_per_floor: 5,
+  cable_rate_per_meter: 158.36,
+  equipment_cost: 2200,
+  odf_cost: 200,
+  splice_cost: 400,
+  floor_count_mode: 'inclusive',
+  cable_route_basis: 'total_distance'
+});
+
+const BUILDING_CALCULATION_NUMBER_FIELDS = [
+  'meters_per_floor',
+  'cable_rate_per_meter',
+  'equipment_cost',
+  'odf_cost',
+  'splice_cost'
+];
+
+function getBuildingCalculationProfile(record) {
+  const storedProfile = record?.calculation_profile && typeof record.calculation_profile === 'object'
+    ? record.calculation_profile
+    : {};
+  const resolvedProfile = { ...DEFAULT_BUILDING_CALCULATION_PROFILE };
+  BUILDING_CALCULATION_NUMBER_FIELDS.forEach(field => {
+    const rawValue = storedProfile[field];
+    if (rawValue === null || rawValue === undefined || rawValue === '') return;
+    const value = Number(rawValue);
+    const isValid = Number.isFinite(value)
+      && (field === 'meters_per_floor' ? value > 0 : value >= 0);
+    if (isValid) resolvedProfile[field] = value;
+  });
+  return {
+    ...resolvedProfile,
+    version: Number(storedProfile.version) || DEFAULT_BUILDING_CALCULATION_PROFILE.version,
+    floor_count_mode: 'inclusive',
+    cable_route_basis: 'total_distance'
+  };
+}
+
+function getStoredBuildingCalculationValue(record, field) {
+  const value = record?.calculation_profile?.[field];
+  return value === null || value === undefined ? '' : value;
+}
+
+function buildBuildingCalculationProfile(formData, existingProfile = null) {
+  const profile = existingProfile && typeof existingProfile === 'object'
+    ? { ...existingProfile }
+    : {};
+  BUILDING_CALCULATION_NUMBER_FIELDS.forEach(field => {
+    delete profile[field];
+    const value = toNullableNumber(formData.get(`calc_${field}`));
+    if (value !== null) profile[field] = value;
+  });
+  return {
+    ...profile,
+    version: DEFAULT_BUILDING_CALCULATION_PROFILE.version,
+    floor_count_mode: 'inclusive',
+    cable_route_basis: 'total_distance',
+    updated_at: new Date().toISOString()
+  };
+}
+
 function normalizeDuplicateValue(value) {
   return String(value || '').trim().toLocaleLowerCase('th-TH').replace(/\s+/g, '');
 }
@@ -4102,6 +4268,7 @@ function addOtherFeeRow(fee = {}) {
     <button type="button" class="other-fee-remove">ลบ</button>
   `;
   list.appendChild(row);
+  applyFieldAriaLabels(row);
 }
 
 function updateOtherFeeRowControls(row) {
@@ -4154,7 +4321,7 @@ const BUILDING_BOQ_FEE_FIELDS = [
   { field: 'annual_fee', label: FEE_LABELS.annualFee, payable: true, unit: 'ครั้ง', category: 'building_fee', cost_type: 'OPEX' },
   { field: 'coordination_fee', label: FEE_LABELS.coordinationFee, payable: true, unit: 'ครั้ง', category: 'building_fee', cost_type: 'CAPEX' },
   { field: 'shaft_fee_per_floor', label: 'ค่า Shaft ต่อชั้น', payable: true, unit: 'ชั้น', category: 'variable_fee', cost_type: 'CAPEX' },
-  { field: 'horizontal_fee', label: 'ค่าวางสาย Horizontal /ม.', payable: true, unit: 'เมตร', category: 'variable_fee', cost_type: 'CAPEX' }
+  { field: 'horizontal_fee', label: 'ค่าวางสายทั้งเส้น /ม.', payable: true, unit: 'เมตร', category: 'variable_fee', cost_type: 'CAPEX' }
 ];
 
 const BOQ_COST_TYPES = new Set(['CAPEX', 'OPEX', 'DEPOSIT', 'UNCLASSIFIED']);
@@ -4468,6 +4635,7 @@ function openBuildingEditor(record = null) {
   form.elements['type'].value = record?.type ?? 'L2';
   form.elements['install_type'].value = record?.install_type ?? 'Building';
   form.elements['survey_type'].value = record?.survey_type ?? 'Need Survey';
+  form.elements['duration'].value = record?.duration ?? '';
   form.elements['area'].value = record?.area ?? '';
   form.elements['province'].value = record?.province ?? '';
   form.elements['location'].value = record?.location ?? '';
@@ -4490,11 +4658,15 @@ function openBuildingEditor(record = null) {
   form.elements['coordination_fee'].value = getBuildingBoqFeeAmount(record, 'coordination_fee') ?? '';
   form.elements['shaft_fee_per_floor'].value = getBuildingBoqFeeAmount(record, 'shaft_fee_per_floor') ?? '';
   form.elements['horizontal_fee'].value = getBuildingBoqFeeAmount(record, 'horizontal_fee') ?? '';
+  BUILDING_CALCULATION_NUMBER_FIELDS.forEach(field => {
+    form.elements[`calc_${field}`].value = getStoredBuildingCalculationValue(record, field);
+  });
   renderOtherFeeRows(getBuildingBoqOtherFees(record));
 
   document.getElementById('building-editor-title').textContent = record ? 'แก้ไขข้อมูลอาคาร' : 'เพิ่มอาคารใหม่';
   if (deleteBtn) deleteBtn.hidden = !record;
   modal.classList.add('open');
+  openDialogAccessibility(modal, form.elements['name_th']);
   rememberFormState(form);
 }
 
@@ -4504,11 +4676,14 @@ function closeBuildingEditor(options = {}) {
   if (!modal) return true;
   if (!options.force && !confirmDiscardFormChanges(form)) return false;
   modal.classList.remove('open');
+  closeDialogAccessibility(modal);
   return true;
 }
 
 function closeDetailDrawerAfterDelete() {
-  document.getElementById('detail-drawer')?.classList.remove('open');
+  const drawer = document.getElementById('detail-drawer');
+  drawer?.classList.remove('open');
+  closeDialogAccessibility(drawer);
   document.getElementById('drawer-overlay')?.classList.remove('open');
   selectedId = null;
 }
@@ -4548,6 +4723,21 @@ async function saveBuildingFromForm(form) {
   const existingRecord = existingId ? findBuildingById(existingId) : null;
   clearBuildingEditorInvalidState(form);
 
+  const invalidCalculationInput = BUILDING_CALCULATION_NUMBER_FIELDS
+    .map(field => form.elements[`calc_${field}`])
+    .find(input => {
+      if (!input || String(input.value).trim() === '') return false;
+      const value = Number(input.value);
+      return !Number.isFinite(value)
+        || (input.name === 'calc_meters_per_floor' ? value <= 0 : value < 0);
+    });
+  if (invalidCalculationInput) {
+    invalidCalculationInput.classList.add('is-invalid');
+    setBuildingEditorMessage('ค่ากำหนดสูตรต้องเป็นตัวเลขไม่ติดลบ และเมตรต่อชั้นต้องมากกว่า 0');
+    invalidCalculationInput.focus();
+    return;
+  }
+
   const invalidRevenueShareRow = [...form.querySelectorAll('.other-fee-row')].find(row => {
     if (row.querySelector('[name="other_fee_calculation_type"]')?.value !== 'revenue_share') return false;
     const rate = toNullableNumber(row.querySelector('[name="other_fee_value"]')?.value);
@@ -4582,7 +4772,7 @@ async function saveBuildingFromForm(form) {
     mobile: String(formData.get('mobile') || '').trim() || null,
     email: String(formData.get('email') || '').trim() || null,
     status: String(formData.get('status') || '').trim(),
-    duration: null,
+    duration: String(formData.get('duration') || '').trim() || null,
     group: String(formData.get('group') || '').trim(),
     survey_type: String(formData.get('survey_type') || '').trim(),
     max_horizontal: toNullableNumber(formData.get('max_horizontal')),
@@ -4599,6 +4789,10 @@ async function saveBuildingFromForm(form) {
     other_fees: collectOtherFees(),
     remark: String(formData.get('remark') || '').trim() || null
   });
+  payload.calculation_profile = buildBuildingCalculationProfile(
+    formData,
+    existingRecord?.calculation_profile
+  );
 
   if (!payload.name_th) {
     form.elements['name_th']?.classList.add('is-invalid');
@@ -4675,7 +4869,9 @@ function loadImageLibrary() {
 function openQuotationModal() {
   window._quotationCalculated = false;
   _updateQuotationDynamicInputs();
-  document.getElementById('quotation-modal').classList.add('open');
+  const modal = document.getElementById('quotation-modal');
+  modal.classList.add('open');
+  openDialogAccessibility(modal, document.getElementById('quotation-customer'));
   initializeQuotationDate();
   // Refresh dynamic inputs based on currentBuildingData
   _updateQuotationDynamicInputs();
@@ -4690,6 +4886,7 @@ function parseWmFloors(value) {
 function _updateQuotationDynamicInputs() {
   const building = window.currentBuildingData || {};
   const buildingName = building.name_th || building.name_eng || '';
+  const calculationProfile = getBuildingCalculationProfile(building);
 
   // Building info banner
   const infoBox = document.getElementById('quotation-building-info');
@@ -4699,6 +4896,15 @@ function _updateQuotationDynamicInputs() {
     infoBox.style.display = 'block';
   } else {
     infoBox.style.display = 'none';
+  }
+  const calculationProfileEl = document.getElementById('quotation-calculation-profile');
+  if (calculationProfileEl) {
+    calculationProfileEl.textContent =
+      `สูตรที่ใช้: ${formatCurrencyNumeric(calculationProfile.meters_per_floor)} ม./ชั้น • ` +
+      `ค่าสาย ${formatCurrencyNumeric(calculationProfile.cable_rate_per_meter)} บ./ม. • ` +
+      `อุปกรณ์ ${formatCurrencyNumeric(calculationProfile.equipment_cost)} บ. • ` +
+      `ODF ${formatCurrencyNumeric(calculationProfile.odf_cost)} บ. • ` +
+      `Splice ${formatCurrencyNumeric(calculationProfile.splice_cost)} บ.`;
   }
 
   // Parse wm_point field
@@ -4744,7 +4950,7 @@ function _updateQuotationDynamicInputs() {
     hwireHints.push(`ใช้ Max H-Wire จากข้อมูลอาคาร ${formatCurrencyNumeric(maxHorizontal)} ม. เป็นค่าเริ่มต้น`);
   }
   if (hwireRate > 0) {
-    hwireHints.push(`อาคารนี้มีค่าวางสาย Horizontal ${formatCurrencyNumeric(hwireRate)} บาท/เมตร`);
+    hwireHints.push(`อาคารนี้มีค่าวางสายทั้งเส้น ${formatCurrencyNumeric(hwireRate)} บาท/เมตร คิดจากระยะสายรวม`);
   }
   hwireRateEl.textContent = hwireHints.join(' | ');
   hwireRateEl.style.color = hwireHints.length ? 'var(--yellow)' : 'var(--muted)';
@@ -4806,6 +5012,7 @@ function closeQuotationModal(options = {}) {
   if (!modal) return true;
   if (!options.force && quotationStateChanged() && !confirm(UNSAVED_CHANGES_CONFIRM_MESSAGE)) return false;
   modal.classList.remove('open');
+  closeDialogAccessibility(modal);
   return true;
 }
 
@@ -4933,36 +5140,37 @@ function calculateQuotation() {
   }
 
   // ===== DISTANCE CALCULATION =====
-  const METERS_PER_FLOOR = 5;
+  const calculationProfile = getBuildingCalculationProfile(building);
+  const metersPerFloor = calculationProfile.meters_per_floor;
   const verticalFloorCount = Math.abs(custFloor - wmFloor) + 1;
-  const verticalDistance = verticalFloorCount * METERS_PER_FLOOR;
+  const verticalDistance = verticalFloorCount * metersPerFloor;
   const totalCableDistance = verticalDistance + hwireInput;
 
   // Show distance summary
   const summaryBox = document.getElementById('quotation-distance-summary');
   document.getElementById('quotation-dist-vertical').innerHTML =
-    `${svgIcon('vertical')} แนวตั้ง: นับรวมชั้น ${wmFloor} ถึง ${custFloor} = ${verticalFloorCount} ชั้น × 5 ม. = ${verticalDistance} ม.`;
+    `${svgIcon('vertical')} แนวตั้ง: นับรวมชั้น ${wmFloor} ถึง ${custFloor} = ${verticalFloorCount} ชั้น × ${formatCurrencyNumeric(metersPerFloor)} ม. = ${formatCurrencyNumeric(verticalDistance)} ม.`;
   document.getElementById('quotation-dist-horizontal').innerHTML =
-    `${svgIcon('horizontal')} แนวนอน: ${hwireInput} ม.`;
+    `${svgIcon('horizontal')} แนวนอน: ${formatCurrencyNumeric(hwireInput)} ม.`;
   document.getElementById('quotation-dist-total').innerHTML =
-    `${svgIcon('ruler')} ระยะสายรวม: ${verticalDistance} + ${hwireInput} = ${totalCableDistance} ม.`;
+    `${svgIcon('ruler')} ระยะสายรวม: ${formatCurrencyNumeric(verticalDistance)} + ${formatCurrencyNumeric(hwireInput)} = ${formatCurrencyNumeric(totalCableDistance)} ม.`;
   summaryBox.style.display = 'block';
 
   // ===== COST CALCULATION =====
-  const CABLE_RATE = 158.36;
-  const EQUIPMENT_COST = 2200;
-  const ODF_COST = 200;
-  const SPLICE_COST = 400;
-
-  const cableCost = totalCableDistance * CABLE_RATE;
+  const cableRatePerMeter = calculationProfile.cable_rate_per_meter;
+  const equipmentCost = calculationProfile.equipment_cost;
+  const odfCost = calculationProfile.odf_cost;
+  const spliceCost = calculationProfile.splice_cost;
+  const cableCost = totalCableDistance * cableRatePerMeter;
 
   // Building fees
   const shaftRatePerFloor = Number(getBuildingBoqFeeAmount(building, 'shaft_fee_per_floor')) || 0;
-  const horizontalRatePerMeter = Number(getBuildingBoqFeeAmount(building, 'horizontal_fee')) || 0;
+  const cableRouteRatePerMeter = Number(getBuildingBoqFeeAmount(building, 'horizontal_fee')) || 0;
 
-  // shaft uses the same inclusive floor count as vertical cable distance.
+  // Shaft uses the inclusive floor count. The cable-route fee covers the whole cable:
+  // calculated vertical distance plus the horizontal distance entered by the user.
   const shaftTotal = shaftRatePerFloor > 0 ? shaftRatePerFloor * verticalFloorCount : 0;
-  const horizontalTotal = horizontalRatePerMeter > 0 ? horizontalRatePerMeter * totalCableDistance : 0;
+  const cableRouteFeeTotal = cableRouteRatePerMeter > 0 ? cableRouteRatePerMeter * totalCableDistance : 0;
 
   // Show shaft info if applicable
   const shaftInfoEl = document.getElementById('quotation-shaft-info');
@@ -5019,11 +5227,11 @@ function calculateQuotation() {
     ...fixedPayableFees,
     { label: `ค่า Shaft (${formatCurrencyNumeric(shaftRatePerFloor)} บ./ชั้น × ${verticalFloorCount} ชั้น)`,
       value: shaftTotal, qty: `${verticalFloorCount} ชั้น`, cost_type: shaftFee?.cost_type || 'CAPEX', hidden: shaftRatePerFloor === 0 || verticalFloorCount === 0 },
-    { label: `ค่าวางสาย Horizontal ตามระยะสายรวม (${formatCurrencyNumeric(horizontalRatePerMeter)} บ./ม. × ${totalCableDistance} ม.)`,
-      value: horizontalTotal, qty: `${totalCableDistance} ม.`, cost_type: horizontalFee?.cost_type || 'CAPEX', hidden: horizontalRatePerMeter === 0 }
+    { label: `ค่าวางสายทั้งเส้น (${formatCurrencyNumeric(cableRouteRatePerMeter)} บ./ม. × ระยะรวม ${totalCableDistance} ม.)`,
+      value: cableRouteFeeTotal, qty: `${totalCableDistance} ม.`, cost_type: horizontalFee?.cost_type || 'CAPEX', hidden: cableRouteRatePerMeter === 0 }
   ].filter(f => !f.hidden && f.value > 0);
 
-  const installationSubtotal = cableCost + EQUIPMENT_COST + ODF_COST + SPLICE_COST;
+  const installationSubtotal = cableCost + equipmentCost + odfCost + spliceCost;
   const costTypeLabels = {
     CAPEX: 'CAPEX',
     OPEX: 'OPEX',
@@ -5050,9 +5258,9 @@ function calculateQuotation() {
 
   // ===== UPDATE FORM DISPLAY =====
   document.getElementById('quotation-cable-cost').textContent = formatCurrency(cableCost);
-  document.getElementById('quotation-equipment-cost').textContent = formatCurrency(EQUIPMENT_COST);
-  document.getElementById('quotation-closure-cost').textContent = formatCurrency(ODF_COST);
-  document.getElementById('quotation-splice-cost').textContent = formatCurrency(SPLICE_COST);
+  document.getElementById('quotation-equipment-cost').textContent = formatCurrency(equipmentCost);
+  document.getElementById('quotation-closure-cost').textContent = formatCurrency(odfCost);
+  document.getElementById('quotation-splice-cost').textContent = formatCurrency(spliceCost);
   document.getElementById('quotation-installation-subtotal').textContent = formatCurrency(installationSubtotal);
 
   const buildingFeesContainer = document.getElementById('quotation-building-fees');
@@ -5118,6 +5326,9 @@ function calculateQuotation() {
   document.getElementById('prev-customer-floor').textContent = `ชั้น ${custFloor}`;
   document.getElementById('prev-distance').textContent = `${totalCableDistance} ม. (แนวตั้ง ${verticalDistance} + แนวนอน ${hwireInput})`;
   document.getElementById('prev-cable-cost').textContent = formatCurrencyNumeric(cableCost) + ' บาท';
+  document.getElementById('prev-equipment-cost').textContent = formatCurrencyNumeric(equipmentCost) + ' บาท';
+  document.getElementById('prev-odf-cost').textContent = formatCurrencyNumeric(odfCost) + ' บาท';
+  document.getElementById('prev-splice-cost').textContent = formatCurrencyNumeric(spliceCost) + ' บาท';
   document.getElementById('prev-installation-subtotal').textContent = formatCurrencyNumeric(installationSubtotal) + ' บาท';
 
   const prevBuildingFeesContainer = document.getElementById('prev-building-fees-table');
@@ -5339,6 +5550,10 @@ function resetQuotationForm(options = {}) {
   const buildingData = Object.prototype.hasOwnProperty.call(options, 'buildingData')
     ? options.buildingData
     : (window.currentBuildingData || {});
+  const calculationProfile = getBuildingCalculationProfile(buildingData);
+  const baseInstallationCost = calculationProfile.equipment_cost
+    + calculationProfile.odf_cost
+    + calculationProfile.splice_cost;
 
   document.getElementById('quotation-customer').value = '';
   document.getElementById('quotation-cust-floor').value = '';
@@ -5349,14 +5564,14 @@ function resetQuotationForm(options = {}) {
   const wmSelect = document.getElementById('quotation-wm-select');
   if (wmSelect) wmSelect.selectedIndex = 0;
   document.getElementById('quotation-cable-cost').textContent = '0 บาท';
-  document.getElementById('quotation-equipment-cost').textContent = '2,200 บาท';
-  document.getElementById('quotation-closure-cost').textContent = '200 บาท';
-  document.getElementById('quotation-splice-cost').textContent = '400 บาท';
-  document.getElementById('quotation-installation-subtotal').textContent = '2,800 บาท';
+  document.getElementById('quotation-equipment-cost').textContent = formatCurrency(calculationProfile.equipment_cost);
+  document.getElementById('quotation-closure-cost').textContent = formatCurrency(calculationProfile.odf_cost);
+  document.getElementById('quotation-splice-cost').textContent = formatCurrency(calculationProfile.splice_cost);
+  document.getElementById('quotation-installation-subtotal').textContent = formatCurrency(baseInstallationCost);
   document.getElementById('quotation-building-fees').innerHTML = '';
   document.getElementById('quotation-revenue-share-summary').innerHTML = '';
   document.getElementById('quotation-total-label').textContent = 'ยอดรวมที่ต้องชำระ';
-  document.getElementById('quotation-total-cost').textContent = '2,800 บาท';
+  document.getElementById('quotation-total-cost').textContent = formatCurrency(baseInstallationCost);
   document.getElementById('quotation-message').style.display = 'none';
   resetQuotationExportMessage();
   document.getElementById('quotation-distance-summary').style.display = 'none';
@@ -5370,7 +5585,10 @@ function resetQuotationForm(options = {}) {
   document.getElementById('prev-customer-floor').textContent = '-';
   document.getElementById('prev-distance').textContent = '-';
   document.getElementById('prev-cable-cost').textContent = '-';
-  document.getElementById('prev-installation-subtotal').textContent = '2,800.00 บาท';
+  document.getElementById('prev-equipment-cost').textContent = formatCurrencyNumeric(calculationProfile.equipment_cost) + ' บาท';
+  document.getElementById('prev-odf-cost').textContent = formatCurrencyNumeric(calculationProfile.odf_cost) + ' บาท';
+  document.getElementById('prev-splice-cost').textContent = formatCurrencyNumeric(calculationProfile.splice_cost) + ' บาท';
+  document.getElementById('prev-installation-subtotal').textContent = formatCurrencyNumeric(baseInstallationCost) + ' บาท';
   document.getElementById('prev-building-fees-table').innerHTML = '';
   document.getElementById('prev-cost-breakdown').innerHTML = '';
   document.getElementById('prev-revenue-share-summary').innerHTML = '';
@@ -5401,6 +5619,8 @@ document.addEventListener('DOMContentLoaded', function() {
   const buildingEditorCancelBtn = document.getElementById('building-editor-cancel-btn');
   const buildingEditorDeleteBtn = document.getElementById('building-editor-delete-btn');
   const otherFeeAddBtn = document.getElementById('other-fee-add-btn');
+  document.addEventListener('keydown', trapDialogTabKey);
+  applyFieldAriaLabels();
 
   (function initMobileTopbarActions(){
     const toggle = document.getElementById('mobile-actions-toggle');
@@ -5434,6 +5654,10 @@ document.addEventListener('DOMContentLoaded', function() {
   (function initAuthParticles(){
     const canvas = document.getElementById('auth-particles');
     if (!canvas) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      canvas.hidden = true;
+      return;
+    }
     const ctx = canvas.getContext('2d');
     let particles = [];
     const COUNT = 60;
@@ -5490,6 +5714,7 @@ document.addEventListener('DOMContentLoaded', function() {
   (function initAuthTilt(){
     const card = document.querySelector('.auth-card');
     if (!card) return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
     let targetRx = 0, targetRy = 0, currentRx = 0, currentRy = 0;
     let angle = 0;
     card.style.animation = 'none';
@@ -5559,6 +5784,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!canManageUsers()) return;
       renderUserAdminList();
       userAdminModal?.classList.add('open');
+      openDialogAccessibility(userAdminModal, userAdminForm?.elements['email']);
       rememberFormState(userAdminForm);
     });
   }
@@ -5668,6 +5894,17 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Escape') return;
+    if (userAdminModal?.classList.contains('open')) {
+      closeUserAdminModal();
+    } else if (buildingEditorModal?.classList.contains('open')) {
+      closeBuildingEditor();
+    } else if (quotationModal?.classList.contains('open')) {
+      closeQuotationModal();
+    }
+  });
+
   document.getElementById('quotation-calculate-btn')?.addEventListener('click', calculateQuotation);
   document.getElementById('quotation-reset-btn')?.addEventListener('click', () => {
     if (quotationStateChanged() && !confirm(UNSAVED_CHANGES_CONFIRM_MESSAGE)) return;
@@ -5717,12 +5954,14 @@ document.addEventListener('DOMContentLoaded', function() {
     overlay.classList.add('open');
     requestAnimationFrame(()=>{
       modal.classList.add('open');
+      openDialogAccessibility(modal, closeBtn);
     });
     document.addEventListener('keydown', onEsc);
   }
   function closeModal(){
     modal.classList.remove('open');
     overlay.classList.remove('open');
+    closeDialogAccessibility(modal);
     selectedId = null;
     document.querySelectorAll('.list-item').forEach(el=>el.classList.remove('selected'));
     allMarkers.forEach(({marker,data:d})=>marker.setIcon(makeIcon(statusColor(d.status),false)));
@@ -5760,17 +5999,18 @@ document.addEventListener('DOMContentLoaded', function() {
   </script>
 
 <!-- ========== QUOTATION MODAL ========== -->
-<div id="quotation-modal">
+<div id="quotation-modal" role="dialog" aria-modal="true" aria-labelledby="quotation-title" aria-hidden="true">
   <div id="quotation-container">
     <!-- FORM PANEL -->
     <div id="quotation-form-panel">
-      <h2><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l2 2v3H7V5l2-2Z"/><path d="M7 8h10v13H7z"/><path d="M9 13h6"/><path d="M9 17h6"/></svg> สร้างใบประเมินราคาเบื้องต้น</h2>
+      <h2 id="quotation-title"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l2 2v3H7V5l2-2Z"/><path d="M7 8h10v13H7z"/><path d="M9 13h6"/><path d="M9 17h6"/></svg> สร้างใบประเมินราคาเบื้องต้น</h2>
       
-      <div id="quotation-message"></div>
+      <div id="quotation-message" role="status" aria-live="polite"></div>
       
       <div id="quotation-building-info" style="display:none; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:12px;">
         <div style="font-weight:700; color:var(--accent); margin-bottom:4px; display:flex; align-items:center; gap:6px;"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M16 8h2a2 2 0 0 1 2 2v11"/><path d="M8 7h4"/><path d="M8 11h4"/><path d="M8 15h4"/><path d="M3 21h18"/></svg> อาคารที่เลือก</div>
         <div id="quotation-building-name" style="color:var(--text); font-weight:600;"></div>
+        <div id="quotation-calculation-profile" style="color:var(--muted); margin-top:4px; line-height:1.5;"></div>
       </div>
 
       <div class="quotation-form-group">
@@ -5832,7 +6072,7 @@ document.addEventListener('DOMContentLoaded', function() {
       <div class="quotation-calc-display">
         <div class="quotation-calc-section">
           <span>ต้นทุนติดตั้ง (CAPEX)</span>
-          <span id="quotation-installation-subtotal">2,800 บาท</span>
+          <span id="quotation-installation-subtotal">-</span>
         </div>
         <div class="quotation-calc-row">
           <span class="quotation-calc-label">ค่าติดตั้งสาย (OFC 2 Core)</span>
@@ -5841,17 +6081,17 @@ document.addEventListener('DOMContentLoaded', function() {
         
         <div class="quotation-calc-row">
           <span class="quotation-calc-label">ค่าติดตั้งอุปกรณ์</span>
-          <span class="quotation-calc-value" id="quotation-equipment-cost">2,200 บาท</span>
+          <span class="quotation-calc-value" id="quotation-equipment-cost">-</span>
         </div>
         
         <div class="quotation-calc-row">
           <span class="quotation-calc-label">ค่า ODF</span>
-          <span class="quotation-calc-value" id="quotation-closure-cost">200 บาท</span>
+          <span class="quotation-calc-value" id="quotation-closure-cost">-</span>
         </div>
         
         <div class="quotation-calc-row">
           <span class="quotation-calc-label">ค่า Splice (2 จุด)</span>
-          <span class="quotation-calc-value" id="quotation-splice-cost">400 บาท</span>
+          <span class="quotation-calc-value" id="quotation-splice-cost">-</span>
         </div>
         
         <div id="quotation-building-fees"></div>
@@ -5860,7 +6100,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         <div class="quotation-total-row">
           <span class="quotation-total-label" id="quotation-total-label">ยอดรวมที่ต้องชำระ</span>
-          <span class="quotation-total-value" id="quotation-total-cost">2,800 บาท</span>
+          <span class="quotation-total-value" id="quotation-total-cost">-</span>
         </div>
       </div>
       
@@ -5928,23 +6168,23 @@ document.addEventListener('DOMContentLoaded', function() {
               <td>2</td>
               <td>ค่าติดตั้งอุปกรณ์</td>
               <td>1 ชุด</td>
-              <td class="quotation-amount">2,200.00 บาท</td>
+              <td class="quotation-amount" id="prev-equipment-cost">-</td>
             </tr>
             <tr>
               <td>3</td>
               <td>ค่า ODF</td>
               <td>1 ชิ้น</td>
-              <td class="quotation-amount">200.00 บาท</td>
+              <td class="quotation-amount" id="prev-odf-cost">-</td>
             </tr>
             <tr>
               <td>4</td>
               <td>ค่า Splice</td>
               <td>2 จุด</td>
-              <td class="quotation-amount">400.00 บาท</td>
+              <td class="quotation-amount" id="prev-splice-cost">-</td>
             </tr>
             <tr class="quotation-subtotal-row">
               <td colspan="3">รวมต้นทุนติดตั้ง</td>
-              <td class="quotation-amount" id="prev-installation-subtotal">2,800.00 บาท</td>
+              <td class="quotation-amount" id="prev-installation-subtotal">-</td>
             </tr>
           </tbody>
           <tbody id="prev-building-fees-table"></tbody>
@@ -5968,17 +6208,17 @@ document.addEventListener('DOMContentLoaded', function() {
         <button class="quotation-btn quotation-btn-secondary" id="quotation-pdf-btn" type="button"><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>PDF</span></button>
         <button class="quotation-btn quotation-btn-warning" id="quotation-image-btn" type="button"><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="10" r="1.5"/><path d="m21 15-5-5L5 19"/></svg>Image</span></button>
       </div>
-      <div id="quotation-export-message"></div>
+      <div id="quotation-export-message" role="status" aria-live="polite"></div>
     </div>
   </div>
 </div>
 
-<div id="user-admin-modal">
+<div id="user-admin-modal" role="dialog" aria-modal="true" aria-labelledby="user-admin-title" aria-hidden="true">
   <div class="user-admin-container">
     <form class="user-admin-panel" id="user-admin-form">
       <div class="user-admin-head">
         <div>
-          <h3>จัดการผู้ใช้</h3>
+          <h3 id="user-admin-title">จัดการผู้ใช้</h3>
           <p>เพิ่มหรือแก้ไขสิทธิ์ผู้ใช้สำหรับระบบ Permission Next</p>
         </div>
       </div>
@@ -6032,7 +6272,7 @@ document.addEventListener('DOMContentLoaded', function() {
   </div>
 </div>
 
-<div id="building-editor-modal">
+<div id="building-editor-modal" role="dialog" aria-modal="true" aria-labelledby="building-editor-title" aria-hidden="true">
   <div id="building-editor-container">
     <div class="building-editor-header">
       <div>
@@ -6053,6 +6293,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="building-field"><label>Type</label><select name="type"><option>L1</option><option>L2</option><option>L3</option></select></div>
         <div class="building-field"><label>Install Type</label><select name="install_type"><option>Building</option><option>Shopping Mall</option><option>Nikom</option><option>Data center</option><option>Airport</option><option>Port</option><option>Market</option></select></div>
         <div class="building-field"><label>Survey Type</label><select name="survey_type"><option>Auto</option><option>Need Survey</option><option>Need Mark</option><option>Wait Check</option></select></div>
+        <div class="building-field"><label>ระยะ Permission (วัน)</label><input name="duration" type="text" inputmode="numeric" placeholder="เช่น 30"></div>
         <div class="building-field"><label>Area</label><input name="area" type="text"></div>
         <div class="building-field"><label>Province</label><input name="province" type="text"></div>
         <div class="building-field"><label>Location</label><input name="location" type="text"></div>
@@ -6069,7 +6310,13 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="building-field"><label>ค่าบริการรายปี (Annual Fee)</label><input name="annual_fee" type="number" step="0.01" min="0"></div>
         <div class="building-field"><label>ค่าธรรมเนียมประสานงาน (Coordination Fee)</label><input name="coordination_fee" type="number" step="0.01" min="0"></div>
         <div class="building-field"><label>ค่า Shaft ต่อชั้น</label><input name="shaft_fee_per_floor" type="number" step="0.01" min="0"></div>
-        <div class="building-field"><label>ค่าวางสาย Horizontal /ม.</label><input name="horizontal_fee" type="number" step="0.01" min="0"></div>
+        <div class="building-field"><label>ค่าวางสายทั้งเส้น /ม.</label><input name="horizontal_fee" type="number" step="0.01" min="0"></div>
+        <div class="building-editor-section">สูตรคำนวณเฉพาะอาคาร</div>
+        <div class="building-field"><label>ระยะแนวตั้งต่อชั้น (ม.)</label><input name="calc_meters_per_floor" type="number" step="0.01" min="0.01" placeholder="ค่าเริ่มต้น 5"><small>เว้นว่างเพื่อใช้ค่าเริ่มต้นกลาง 5 เมตร/ชั้น</small></div>
+        <div class="building-field"><label>ค่าติดตั้งสาย OFC ต่อเมตร</label><input name="calc_cable_rate_per_meter" type="number" step="0.01" min="0" placeholder="ค่าเริ่มต้น 158.36"><small>คูณระยะสายรวมทั้งแนวตั้งและแนวนอน</small></div>
+        <div class="building-field"><label>ค่าติดตั้งอุปกรณ์</label><input name="calc_equipment_cost" type="number" step="0.01" min="0" placeholder="ค่าเริ่มต้น 2,200"></div>
+        <div class="building-field"><label>ค่า ODF</label><input name="calc_odf_cost" type="number" step="0.01" min="0" placeholder="ค่าเริ่มต้น 200"></div>
+        <div class="building-field"><label>ค่า Splice</label><input name="calc_splice_cost" type="number" step="0.01" min="0" placeholder="ค่าเริ่มต้น 400"></div>
         <div class="other-fees-panel">
           <div class="building-editor-section" style="margin-top:0;">ค่าใช้จ่ายเพิ่มเติม</div>
           <div id="other-fees-list" class="other-fees-list"></div>
