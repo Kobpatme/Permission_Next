@@ -971,7 +971,15 @@ select.flt.active{
 }
 .measure-status strong{color:var(--text); font-size:12px; font-variant-numeric:tabular-nums;}
 #map.measuring,.measuring .leaflet-interactive{cursor:crosshair !important;}
-.measure-point{filter:drop-shadow(0 2px 4px rgba(0,0,0,.35));}
+.measure-drag-marker{
+  display:grid !important; place-items:center; border-radius:50%;
+  background:#2563eb; border:2px solid #fff;
+  box-shadow:0 2px 7px rgba(0,0,0,.38); cursor:grab !important;
+}
+.measure-drag-marker:hover{box-shadow:0 0 0 5px rgba(37,99,235,.2),0 3px 9px rgba(0,0,0,.42);}
+.measuring .measure-drag-marker{cursor:grab !important;}
+.measure-drag-marker.leaflet-drag-target,.measuring .measure-drag-marker.leaflet-drag-target{cursor:grabbing !important;}
+.measure-drag-marker.measure-start-point{background:#16a34a;}
 .leaflet-tooltip.measure-tooltip{
   padding:4px 7px; border:1px solid rgba(255,255,255,.7); border-radius:6px;
   background:#2563eb; color:#fff; box-shadow:0 3px 10px rgba(0,0,0,.25);
@@ -3509,6 +3517,8 @@ const measureLayer = L.layerGroup().addTo(map);
 const measurePreviewLayer = L.layerGroup().addTo(map);
 let measureState = 'idle';
 let measurePoints = [];
+let measureLine = null;
+let measureMarkers = [];
 
 function formatMapDistance(meters) {
   if (meters < 1000) return `${Math.round(meters).toLocaleString('th-TH')} ม.`;
@@ -3530,10 +3540,25 @@ function setMeasureStatus(distance, instruction) {
   measureStatus.innerHTML = `<strong>ระยะรวม ${formatMapDistance(distance)}</strong><br>${instruction}`;
 }
 
+function updateMeasurementVisuals() {
+  if (measureLine) measureLine.setLatLngs(measurePoints);
+  let cumulativeDistance = 0;
+  measureMarkers.forEach((marker, index) => {
+    if (index) cumulativeDistance += map.distance(measurePoints[index - 1], measurePoints[index]);
+    marker.setTooltipContent(index === 0 ? 'จุดเริ่มต้น' : formatMapDistance(cumulativeDistance));
+  });
+  const instruction = measureState === 'finished'
+    ? 'ลากจุดเพื่อปรับเส้นทาง • กด “ล้างระยะ” เพื่อเริ่มใหม่'
+    : 'ลากจุดเพื่อปรับ • คลิกเพิ่มจุด • ดับเบิลคลิกหรือคลิกขวาเพื่อจบ';
+  setMeasureStatus(getMeasuredDistance(), instruction);
+}
+
 function renderMeasurement() {
   measureLayer.clearLayers();
+  measureLine = null;
+  measureMarkers = [];
   if (measurePoints.length > 1) {
-    L.polyline(measurePoints, {
+    measureLine = L.polyline(measurePoints, {
       color: '#2563eb', weight: 4, opacity: .95, lineCap: 'round', lineJoin: 'round'
     }).addTo(measureLayer);
   }
@@ -3542,13 +3567,29 @@ function renderMeasurement() {
   measurePoints.forEach((point, index) => {
     if (index) cumulativeDistance += map.distance(measurePoints[index - 1], point);
     const label = index === 0 ? 'จุดเริ่มต้น' : formatMapDistance(cumulativeDistance);
-    L.circleMarker(point, {
-      radius: index === 0 ? 6 : 5,
-      color: '#fff', weight: 2, fillColor: '#2563eb', fillOpacity: 1,
-      className: 'measure-point', interactive: false
+    const marker = L.marker(point, {
+      draggable: true,
+      autoPan: true,
+      keyboard: false,
+      zIndexOffset: 1000,
+      icon: L.divIcon({
+        className: `measure-drag-marker${index === 0 ? ' measure-start-point' : ''}`,
+        iconSize: [index === 0 ? 16 : 14, index === 0 ? 16 : 14],
+        iconAnchor: [index === 0 ? 8 : 7, index === 0 ? 8 : 7]
+      })
     }).bindTooltip(label, {
       permanent: true, direction: 'top', offset: [0, -7], className: 'measure-tooltip'
     }).addTo(measureLayer);
+    marker.on('dragstart', () => measurePreviewLayer.clearLayers());
+    marker.on('drag', e => {
+      measurePoints[index] = e.target.getLatLng();
+      updateMeasurementVisuals();
+    });
+    marker.on('dragend', e => {
+      measurePoints[index] = e.target.getLatLng();
+      updateMeasurementVisuals();
+    });
+    measureMarkers.push(marker);
   });
 }
 
@@ -3557,6 +3598,8 @@ function clearMeasurement() {
   measurePoints = [];
   measureLayer.clearLayers();
   measurePreviewLayer.clearLayers();
+  measureLine = null;
+  measureMarkers = [];
   measureStatus.hidden = true;
   measureStatus.textContent = '';
   measureButton.classList.remove('active');
@@ -3574,7 +3617,7 @@ function startMeasurement() {
   measureButton.textContent = 'ยกเลิก';
   document.getElementById('map').classList.add('measuring');
   map.doubleClickZoom.disable();
-  setMeasureStatus(0, 'คลิกเพื่อวางจุด • ดับเบิลคลิกหรือคลิกขวาเพื่อจบ');
+  setMeasureStatus(0, 'คลิกเพื่อวางจุด • ลากจุดเพื่อปรับ • ดับเบิลคลิกหรือคลิกขวาเพื่อจบ');
 }
 
 function finishMeasurement() {
@@ -3584,7 +3627,7 @@ function finishMeasurement() {
   measureButton.textContent = 'ล้างระยะ';
   document.getElementById('map').classList.remove('measuring');
   map.doubleClickZoom.enable();
-  setMeasureStatus(getMeasuredDistance(), 'วัดระยะเสร็จแล้ว • กด “ล้างระยะ” เพื่อเริ่มใหม่');
+  setMeasureStatus(getMeasuredDistance(), 'ลากจุดเพื่อปรับเส้นทาง • กด “ล้างระยะ” เพื่อเริ่มใหม่');
 }
 
 measureButton?.addEventListener('click', () => {
@@ -3596,7 +3639,7 @@ map.on('click', e => {
   if (measureState !== 'drawing') return;
   measurePoints.push(e.latlng);
   renderMeasurement();
-  setMeasureStatus(getMeasuredDistance(), 'คลิกเพื่อเพิ่มจุด • ดับเบิลคลิกหรือคลิกขวาเพื่อจบ');
+  setMeasureStatus(getMeasuredDistance(), 'ลากจุดเพื่อปรับ • คลิกเพิ่มจุด • ดับเบิลคลิกหรือคลิกขวาเพื่อจบ');
 });
 
 map.on('mousemove', e => {
@@ -3607,7 +3650,7 @@ map.on('mousemove', e => {
     color: '#2563eb', weight: 3, opacity: .7, dashArray: '6 7', interactive: false
   }).addTo(measurePreviewLayer);
   const previewDistance = getMeasuredDistance() + map.distance(previewPoints[0], previewPoints[1]);
-  setMeasureStatus(previewDistance, 'คลิกเพื่อเพิ่มจุด • ดับเบิลคลิกหรือคลิกขวาเพื่อจบ');
+  setMeasureStatus(previewDistance, 'ลากจุดเพื่อปรับ • คลิกเพิ่มจุด • ดับเบิลคลิกหรือคลิกขวาเพื่อจบ');
 });
 
 map.on('dblclick', e => {
