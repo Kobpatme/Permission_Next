@@ -955,7 +955,7 @@ select.flt.active{
   box-shadow:var(--shadow-md); backdrop-filter:blur(14px) saturate(150%);
   -webkit-backdrop-filter:blur(14px) saturate(150%);
 }
-.map-tools-actions{display:grid; grid-template-columns:1fr 1fr; gap:7px;}
+.map-tools-actions{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px;}
 .map-tool-btn{
   border:1px solid var(--border); background:var(--surface2); color:var(--text);
   border-radius:8px; padding:8px 9px; cursor:pointer;
@@ -964,6 +964,20 @@ select.flt.active{
 }
 .map-tool-btn:hover{transform:translateY(-1px); border-color:var(--border2); background:var(--surface3);}
 .map-tool-btn.active{background:var(--grad-accent); color:#fff; border-color:transparent; box-shadow:0 5px 16px var(--accent-glow);}
+.measure-status{
+  margin-top:9px; padding:9px 10px; border:1px solid var(--border); border-radius:9px;
+  background:color-mix(in oklab, var(--surface) 90%, transparent);
+  color:var(--text2); font-size:10.5px; font-weight:700; line-height:1.45;
+}
+.measure-status strong{color:var(--text); font-size:12px; font-variant-numeric:tabular-nums;}
+#map.measuring,.measuring .leaflet-interactive{cursor:crosshair !important;}
+.measure-point{filter:drop-shadow(0 2px 4px rgba(0,0,0,.35));}
+.leaflet-tooltip.measure-tooltip{
+  padding:4px 7px; border:1px solid rgba(255,255,255,.7); border-radius:6px;
+  background:#2563eb; color:#fff; box-shadow:0 3px 10px rgba(0,0,0,.25);
+  font:800 10.5px/1.2 'Inter','Segoe UI',sans-serif;
+}
+.leaflet-tooltip-top.measure-tooltip::before{border-top-color:#2563eb;}
 .legend-panel{
   display:grid; grid-template-rows:1fr;
   transition:grid-template-rows .22s ease, opacity .18s ease, margin-top .18s ease;
@@ -2401,7 +2415,9 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
       <div class="map-tools-actions">
         <button class="map-tool-btn active" id="legend-toggle" type="button">Legend</button>
         <button class="map-tool-btn" id="fit-bounds-btn" type="button">Fit Bounds</button>
+        <button class="map-tool-btn" id="measure-distance-btn" type="button" aria-pressed="false" title="คลิกบนแผนที่เพื่อวัดระยะ">วัดระยะ</button>
       </div>
+      <div class="measure-status" id="measure-status" role="status" aria-live="polite" hidden></div>
       <div class="legend-panel" id="legend-panel">
         <div class="legend-panel-inner">
           <div class="legend-row">
@@ -3485,6 +3501,136 @@ document.getElementById('map-mode-toggle')?.addEventListener('click', e => {
 // ====== MAP ======
 const map = L.map('map', { center: [13.75, 100.52], zoom: 11, zoomControl: true });
 tileLayer = makeTile().addTo(map);
+
+// ====== DISTANCE MEASUREMENT ======
+const measureButton = document.getElementById('measure-distance-btn');
+const measureStatus = document.getElementById('measure-status');
+const measureLayer = L.layerGroup().addTo(map);
+const measurePreviewLayer = L.layerGroup().addTo(map);
+let measureState = 'idle';
+let measurePoints = [];
+
+function formatMapDistance(meters) {
+  if (meters < 1000) return `${Math.round(meters).toLocaleString('th-TH')} ม.`;
+  const digits = meters < 10000 ? 2 : 1;
+  return `${(meters / 1000).toLocaleString('th-TH', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits
+  })} กม.`;
+}
+
+function getMeasuredDistance(points = measurePoints) {
+  return points.slice(1).reduce((total, point, index) => {
+    return total + map.distance(points[index], point);
+  }, 0);
+}
+
+function setMeasureStatus(distance, instruction) {
+  measureStatus.hidden = false;
+  measureStatus.innerHTML = `<strong>ระยะรวม ${formatMapDistance(distance)}</strong><br>${instruction}`;
+}
+
+function renderMeasurement() {
+  measureLayer.clearLayers();
+  if (measurePoints.length > 1) {
+    L.polyline(measurePoints, {
+      color: '#2563eb', weight: 4, opacity: .95, lineCap: 'round', lineJoin: 'round'
+    }).addTo(measureLayer);
+  }
+
+  let cumulativeDistance = 0;
+  measurePoints.forEach((point, index) => {
+    if (index) cumulativeDistance += map.distance(measurePoints[index - 1], point);
+    const label = index === 0 ? 'จุดเริ่มต้น' : formatMapDistance(cumulativeDistance);
+    L.circleMarker(point, {
+      radius: index === 0 ? 6 : 5,
+      color: '#fff', weight: 2, fillColor: '#2563eb', fillOpacity: 1,
+      className: 'measure-point', interactive: false
+    }).bindTooltip(label, {
+      permanent: true, direction: 'top', offset: [0, -7], className: 'measure-tooltip'
+    }).addTo(measureLayer);
+  });
+}
+
+function clearMeasurement() {
+  measureState = 'idle';
+  measurePoints = [];
+  measureLayer.clearLayers();
+  measurePreviewLayer.clearLayers();
+  measureStatus.hidden = true;
+  measureStatus.textContent = '';
+  measureButton.classList.remove('active');
+  measureButton.setAttribute('aria-pressed', 'false');
+  measureButton.textContent = 'วัดระยะ';
+  document.getElementById('map').classList.remove('measuring');
+  map.doubleClickZoom.enable();
+}
+
+function startMeasurement() {
+  clearMeasurement();
+  measureState = 'drawing';
+  measureButton.classList.add('active');
+  measureButton.setAttribute('aria-pressed', 'true');
+  measureButton.textContent = 'ยกเลิก';
+  document.getElementById('map').classList.add('measuring');
+  map.doubleClickZoom.disable();
+  setMeasureStatus(0, 'คลิกเพื่อวางจุด • ดับเบิลคลิกหรือคลิกขวาเพื่อจบ');
+}
+
+function finishMeasurement() {
+  if (measureState !== 'drawing' || measurePoints.length < 2) return;
+  measureState = 'finished';
+  measurePreviewLayer.clearLayers();
+  measureButton.textContent = 'ล้างระยะ';
+  document.getElementById('map').classList.remove('measuring');
+  map.doubleClickZoom.enable();
+  setMeasureStatus(getMeasuredDistance(), 'วัดระยะเสร็จแล้ว • กด “ล้างระยะ” เพื่อเริ่มใหม่');
+}
+
+measureButton?.addEventListener('click', () => {
+  if (measureState === 'idle') startMeasurement();
+  else clearMeasurement();
+});
+
+map.on('click', e => {
+  if (measureState !== 'drawing') return;
+  measurePoints.push(e.latlng);
+  renderMeasurement();
+  setMeasureStatus(getMeasuredDistance(), 'คลิกเพื่อเพิ่มจุด • ดับเบิลคลิกหรือคลิกขวาเพื่อจบ');
+});
+
+map.on('mousemove', e => {
+  if (measureState !== 'drawing' || !measurePoints.length) return;
+  const previewPoints = [measurePoints[measurePoints.length - 1], e.latlng];
+  measurePreviewLayer.clearLayers();
+  L.polyline(previewPoints, {
+    color: '#2563eb', weight: 3, opacity: .7, dashArray: '6 7', interactive: false
+  }).addTo(measurePreviewLayer);
+  const previewDistance = getMeasuredDistance() + map.distance(previewPoints[0], previewPoints[1]);
+  setMeasureStatus(previewDistance, 'คลิกเพื่อเพิ่มจุด • ดับเบิลคลิกหรือคลิกขวาเพื่อจบ');
+});
+
+map.on('dblclick', e => {
+  if (measureState !== 'drawing') return;
+  if (measurePoints.length > 1) {
+    const last = map.latLngToContainerPoint(measurePoints[measurePoints.length - 1]);
+    const previous = map.latLngToContainerPoint(measurePoints[measurePoints.length - 2]);
+    if (last.distanceTo(previous) <= 8) measurePoints.pop();
+  }
+  renderMeasurement();
+  finishMeasurement();
+  if (e.originalEvent) L.DomEvent.stop(e.originalEvent);
+});
+
+map.on('contextmenu', e => {
+  if (measureState !== 'drawing') return;
+  finishMeasurement();
+  if (e.originalEvent) L.DomEvent.preventDefault(e.originalEvent);
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && measureState !== 'idle') clearMeasurement();
+});
 
 // ====== MARKER COLORS ======
 function statusColor(s) {
