@@ -3755,8 +3755,44 @@ function canvasToBlob(canvas, type = 'image/png', quality) {
   });
 }
 
-function renderQuotationCanvas(element, imageMap) {
-  return window.html2canvas(element, {
+function cropCanvasToQuotationContent(canvas, element) {
+  const elementRect = element.getBoundingClientRect();
+  const contentRects = [...element.children]
+    .filter(child => !child.classList.contains('quotation-preview-watermark'))
+    .map(child => child.getBoundingClientRect())
+    .filter(rect => rect.width > 0 && rect.height > 0);
+  if (!contentRects.length || !elementRect.width || !elementRect.height) return canvas;
+
+  const padding = Math.max(12, parseFloat(getComputedStyle(element).paddingTop) || 24);
+  const left = Math.max(elementRect.left, Math.min(...contentRects.map(rect => rect.left)) - padding);
+  const top = Math.max(elementRect.top, Math.min(...contentRects.map(rect => rect.top)) - padding);
+  const right = Math.min(elementRect.right, Math.max(...contentRects.map(rect => rect.right)) + padding);
+  const bottom = Math.min(elementRect.bottom, Math.max(...contentRects.map(rect => rect.bottom)) + padding);
+  const scaleX = canvas.width / element.scrollWidth;
+  const scaleY = canvas.height / element.scrollHeight;
+  const sourceX = Math.max(0, Math.floor((left - elementRect.left) * scaleX));
+  const sourceY = Math.max(0, Math.floor((top - elementRect.top) * scaleY));
+  const sourceWidth = Math.min(canvas.width - sourceX, Math.ceil((right - left) * scaleX));
+  const sourceHeight = Math.min(canvas.height - sourceY, Math.ceil((bottom - top) * scaleY));
+  if (sourceWidth <= 0 || sourceHeight <= 0) return canvas;
+
+  const cropped = document.createElement('canvas');
+  cropped.width = sourceWidth;
+  cropped.height = sourceHeight;
+  const context = cropped.getContext('2d');
+  if (!context) return canvas;
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, cropped.width, cropped.height);
+  context.drawImage(
+    canvas,
+    sourceX, sourceY, sourceWidth, sourceHeight,
+    0, 0, cropped.width, cropped.height
+  );
+  return cropped;
+}
+
+async function renderQuotationCanvas(element, imageMap) {
+  const canvas = await window.html2canvas(element, {
     scale: 2,
     useCORS: true,
     allowTaint: false,
@@ -3770,6 +3806,7 @@ function renderQuotationCanvas(element, imageMap) {
     windowHeight: element.scrollHeight,
     onclone: clonedDocument => applyExportCloneFixes(clonedDocument, imageMap)
   });
+  return cropCanvasToQuotationContent(canvas, element);
 }
 
 function canvasToPdfBlob(canvas) {
@@ -3791,7 +3828,8 @@ function canvasToPdfBlob(canvas) {
     const renderWidth = canvas.width * scale;
     const renderHeight = canvas.height * scale;
     const x = (pageWidth - renderWidth) / 2;
-    pdf.addImage(canvas, 'PNG', x, margin, renderWidth, renderHeight, undefined, 'FAST');
+    const y = (pageHeight - renderHeight) / 2;
+    pdf.addImage(canvas, 'PNG', x, y, renderWidth, renderHeight, undefined, 'FAST');
     return pdf.output('blob');
   }
 
@@ -3815,11 +3853,38 @@ function canvasToPdfBlob(canvas) {
     );
     if (pageIndex > 0) pdf.addPage();
     const renderHeight = currentHeight * contentWidth / canvas.width;
-    pdf.addImage(pageCanvas, 'PNG', margin, margin, contentWidth, renderHeight, undefined, 'FAST');
+    const y = currentHeight < sliceHeight ? (pageHeight - renderHeight) / 2 : margin;
+    pdf.addImage(pageCanvas, 'PNG', margin, y, contentWidth, renderHeight, undefined, 'FAST');
     sourceY += currentHeight;
     pageIndex += 1;
   }
   return pdf.output('blob');
+}
+
+function canvasToA4Image(canvas) {
+  const pageWidth = 1600;
+  const pageHeight = Math.round(pageWidth * 297 / 210);
+  const margin = Math.round(pageWidth * 8 / 210);
+  const contentWidth = pageWidth - (margin * 2);
+  const contentHeight = pageHeight - (margin * 2);
+  const projectedHeight = canvas.height * contentWidth / canvas.width;
+  const fitsSinglePage = projectedHeight <= contentHeight * 1.12;
+  const scale = fitsSinglePage
+    ? Math.min(contentWidth / canvas.width, contentHeight / canvas.height)
+    : contentWidth / canvas.width;
+  const renderWidth = Math.round(canvas.width * scale);
+  const renderHeight = Math.round(canvas.height * scale);
+  const output = document.createElement('canvas');
+  output.width = pageWidth;
+  output.height = fitsSinglePage ? pageHeight : renderHeight + (margin * 2);
+  const context = output.getContext('2d');
+  if (!context) throw new Error('ไม่สามารถจัดรูปภาพสำหรับ Export ได้');
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, output.width, output.height);
+  const x = Math.round((output.width - renderWidth) / 2);
+  const y = fitsSinglePage ? Math.round((output.height - renderHeight) / 2) : margin;
+  context.drawImage(canvas, x, y, renderWidth, renderHeight);
+  return output;
 }
 
 function downloadBlob(blob, filename) {
@@ -3931,7 +3996,8 @@ async function generateQuotationImage() {
     msgEl.className = '';
     msgEl.textContent = 'กำลังจัดรูปแบบและสร้างไฟล์รูปภาพ...';
     msgEl.style.display = 'block';
-    const canvas = await withQuotationExportLayout(element, imageMap => renderQuotationCanvas(element, imageMap));
+    const contentCanvas = await withQuotationExportLayout(element, imageMap => renderQuotationCanvas(element, imageMap));
+    const canvas = canvasToA4Image(contentCanvas);
     const blob = await canvasToBlob(canvas, 'image/png');
     downloadBlob(blob, `quotation_${QE().sanitizeFilename(customerName)}_${Date.now()}.png`);
 

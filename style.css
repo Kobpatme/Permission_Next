@@ -1585,9 +1585,12 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
 #quotation-preview.quotation-exporting{
   width:794px;
   max-width:none;
+  min-height:0;
   max-height:none;
   overflow:visible;
   box-sizing:border-box;
+  box-shadow:none;
+  border-radius:0;
 }
 .quotation-preview-watermark{
   position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
