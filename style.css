@@ -1582,6 +1582,13 @@ button:focus-visible, select:focus-visible, input:focus-visible{outline:2px soli
   box-shadow:0 8px 28px rgba(0,0,0,.18);
   max-height:calc(100vh - 220px); overflow:auto;
 }
+#quotation-preview.quotation-exporting{
+  width:794px;
+  max-width:none;
+  max-height:none;
+  overflow:visible;
+  box-sizing:border-box;
+}
 .quotation-preview-watermark{
   position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
   font-size:52px; font-weight:900; letter-spacing:.2em; color:rgba(15,23,42,.05);

@@ -2692,27 +2692,67 @@ const QE = () => window.QuotationEngine;
 const lazyScripts = {};
 let quotationAutoCalcTimer = null;
 
-function loadScriptOnce(src, globalName) {
+function loadScriptOnce(src, globalName, timeoutMs = 15000) {
   if (window[globalName]) return Promise.resolve();
   if (!lazyScripts[src]) {
     lazyScripts[src] = new Promise((resolve, reject) => {
       const script = document.createElement('script');
+      let timeoutId;
+      const finish = error => {
+        clearTimeout(timeoutId);
+        script.onload = null;
+        script.onerror = null;
+        if (error) {
+          script.remove();
+          delete lazyScripts[src];
+          reject(error);
+        } else if (!window[globalName]) {
+          script.remove();
+          delete lazyScripts[src];
+          reject(new Error(`Library loaded without exposing window.${globalName}`));
+        } else {
+          resolve();
+        }
+      };
       script.src = src;
       script.async = true;
-      script.onload = resolve;
-      script.onerror = reject;
+      script.crossOrigin = 'anonymous';
+      script.onload = () => finish();
+      script.onerror = () => finish(new Error(`Unable to load ${src}`));
+      timeoutId = setTimeout(() => finish(new Error(`Timed out loading ${src}`)), timeoutMs);
       document.head.appendChild(script);
     });
   }
   return lazyScripts[src];
 }
 
+async function loadLibraryFromSources(sources, globalName) {
+  if (window[globalName]) return;
+  let lastError;
+  for (const src of sources) {
+    try {
+      await loadScriptOnce(src, globalName);
+      return;
+    } catch (error) {
+      lastError = error;
+      console.warn(`โหลด ${globalName} จาก ${src} ไม่สำเร็จ`, error);
+    }
+  }
+  throw lastError || new Error(`Unable to load ${globalName}`);
+}
+
 function loadPdfLibrary() {
-  return loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js', 'html2pdf');
+  return loadLibraryFromSources([
+    'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js',
+    'https://unpkg.com/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js'
+  ], 'html2pdf');
 }
 
 function loadImageLibrary() {
-  return loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'html2canvas');
+  return loadLibraryFromSources([
+    'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+    'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js'
+  ], 'html2canvas');
 }
 
 // Quotation modal functions
@@ -3637,6 +3677,92 @@ async function waitForQuotationFonts() {
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 }
 
+function quotationLogoFallbackDataUrl() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="112" height="112" viewBox="0 0 112 112"><rect width="112" height="112" rx="20" fill="#1d4ed8"/><path d="M25 29h34c19 0 30 10 30 27S78 83 59 83H43v16H25V29zm18 16v22h15c8 0 13-4 13-11s-5-11-13-11H43z" fill="white"/></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error('อ่านข้อมูลรูปภาพไม่สำเร็จ'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function buildExportImageMap(element) {
+  const imageMap = new Map();
+  await Promise.all([...element.querySelectorAll('img')].map(async image => {
+    const src = image.currentSrc || image.src;
+    if (!src || src.startsWith('data:') || src.startsWith('blob:')) return;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    try {
+      const response = await fetch(src, {
+        mode: 'cors',
+        cache: 'force-cache',
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      imageMap.set(src, await blobToDataUrl(await response.blob()));
+    } catch (error) {
+      console.warn('ไม่สามารถฝังรูปภายนอกในไฟล์ Export ได้ จะใช้รูปสำรอง:', src, error);
+      if (image.classList.contains('quotation-preview-logo')) {
+        imageMap.set(src, quotationLogoFallbackDataUrl());
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }));
+  return imageMap;
+}
+
+async function withQuotationExportLayout(element, task) {
+  const previousScrollTop = element.scrollTop;
+  element.classList.add('quotation-exporting');
+  try {
+    await waitForQuotationFonts();
+    const imageMap = await buildExportImageMap(element);
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    return await task(imageMap);
+  } finally {
+    element.classList.remove('quotation-exporting');
+    element.scrollTop = previousScrollTop;
+  }
+}
+
+function applyExportCloneFixes(clonedDocument, imageMap) {
+  const clone = clonedDocument.getElementById('quotation-preview');
+  if (!clone) return;
+  clone.classList.add('quotation-exporting');
+  clone.querySelectorAll('img').forEach(image => {
+    const replacement = imageMap.get(image.currentSrc || image.src) || imageMap.get(image.src);
+    if (replacement) image.src = replacement;
+  });
+}
+
+function canvasToBlob(canvas, type = 'image/png', quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => {
+      if (blob) resolve(blob);
+      else reject(new Error('เบราว์เซอร์ไม่สามารถสร้างไฟล์รูปภาพได้'));
+    }, type, quality);
+  });
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 async function generateQuotationPDF() {
   const customerName = document.getElementById('quotation-customer').value.trim();
   const msgEl = getQuotationExportMessage();
@@ -3649,13 +3775,16 @@ async function generateQuotationPDF() {
     return;
   }
 
-  if (typeof html2pdf === 'undefined') {
+  if (pdfBtn) pdfBtn.disabled = true;
+
+  if (typeof window.html2pdf === 'undefined') {
     msgEl.className = 'error';
     msgEl.textContent = 'กำลังโหลดไลบรารี่ PDF...';
     msgEl.style.display = 'block';
     try {
       await loadPdfLibrary();
     } catch (err) {
+      if (pdfBtn) pdfBtn.disabled = false;
       msgEl.className = 'error';
       msgEl.innerHTML = iconText('x', 'โหลดไลบรารี่ PDF ไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต');
       msgEl.style.display = 'block';
@@ -3664,7 +3793,7 @@ async function generateQuotationPDF() {
   }
   
   const element = document.getElementById('quotation-preview');
-  const options = {
+  const baseOptions = {
     margin: [8, 8, 8, 8],
     filename: `quotation_${QE().sanitizeFilename(customerName)}_${Date.now()}.pdf`,
     image: { type: 'png', quality: 1 },
@@ -3680,7 +3809,8 @@ async function generateQuotationPDF() {
       logging: false,
       scrollX: 0,
       scrollY: 0,
-      windowWidth: element.scrollWidth
+      windowWidth: element.scrollWidth,
+      windowHeight: element.scrollHeight
     },
     jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4', compress: true }
   };
@@ -3690,8 +3820,18 @@ async function generateQuotationPDF() {
     msgEl.className = '';
     msgEl.textContent = 'กำลังจัดรูปแบบและสร้างไฟล์ PDF...';
     msgEl.style.display = 'block';
-    await waitForQuotationFonts();
-    await html2pdf().set(options).from(element).save();
+    await withQuotationExportLayout(element, async imageMap => {
+      const options = {
+        ...baseOptions,
+        html2canvas: {
+          ...baseOptions.html2canvas,
+          width: element.scrollWidth,
+          height: element.scrollHeight,
+          onclone: clonedDocument => applyExportCloneFixes(clonedDocument, imageMap)
+        }
+      };
+      await window.html2pdf().set(options).from(element).save();
+    });
 
     msgEl.className = 'success';
     msgEl.innerHTML = iconText('check', 'PDF ดาวน์โหลดสำเร็จ');
@@ -3711,6 +3851,7 @@ async function generateQuotationPDF() {
 async function generateQuotationImage() {
   const customerName = document.getElementById('quotation-customer').value.trim();
   const msgEl = getQuotationExportMessage();
+  const imageBtn = document.getElementById('quotation-image-btn');
 
   if (!window._quotationCalculated || !customerName) {
     msgEl.className = 'error';
@@ -3719,14 +3860,17 @@ async function generateQuotationImage() {
     return;
   }
 
+  if (imageBtn) imageBtn.disabled = true;
+
   
-  if (typeof html2canvas === 'undefined') {
+  if (typeof window.html2canvas === 'undefined') {
     msgEl.className = 'error';
     msgEl.textContent = 'กำลังโหลดไลบรารี่รูปภาพ...';
     msgEl.style.display = 'block';
     try {
       await loadImageLibrary();
     } catch (err) {
+      if (imageBtn) imageBtn.disabled = false;
       msgEl.className = 'error';
       msgEl.innerHTML = iconText('x', 'โหลดไลบรารี่รูปภาพไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต');
       msgEl.style.display = 'block';
@@ -3735,29 +3879,40 @@ async function generateQuotationImage() {
   }
   
   const element = document.getElementById('quotation-preview');
-  await waitForQuotationFonts();
-  
-  html2canvas(element, {
-    scale: 2,
-    useCORS: true,
-    backgroundColor: '#ffffff',
-    logging: false
-  }).then(canvas => {
-    const link = document.createElement('a');
-    link.href = canvas.toDataURL('image/png');
-    link.download = `quotation_${QE().sanitizeFilename(customerName)}_${Date.now()}.png`;
-    link.click();
-    
+  try {
+    if (imageBtn) imageBtn.disabled = true;
+    msgEl.className = '';
+    msgEl.textContent = 'กำลังจัดรูปแบบและสร้างไฟล์รูปภาพ...';
+    msgEl.style.display = 'block';
+    const canvas = await withQuotationExportLayout(element, imageMap => window.html2canvas(element, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: false,
+      backgroundColor: '#ffffff',
+      logging: false,
+      scrollX: 0,
+      scrollY: 0,
+      width: element.scrollWidth,
+      height: element.scrollHeight,
+      windowWidth: element.scrollWidth,
+      windowHeight: element.scrollHeight,
+      onclone: clonedDocument => applyExportCloneFixes(clonedDocument, imageMap)
+    }));
+    const blob = await canvasToBlob(canvas, 'image/png');
+    downloadBlob(blob, `quotation_${QE().sanitizeFilename(customerName)}_${Date.now()}.png`);
+
     msgEl.className = 'success';
     msgEl.innerHTML = iconText('check', 'รูปภาพดาวน์โหลดสำเร็จ');
     msgEl.style.display = 'block';
     setTimeout(() => msgEl.style.display = 'none', 3000);
-  }).catch(err => {
-    console.error('Error:', err);
+  } catch (err) {
+    console.error('สร้างรูปภาพไม่สำเร็จ:', err);
     msgEl.className = 'error';
-    msgEl.innerHTML = iconText('x', 'เกิดข้อผิดพลาดในการสร้างรูปภาพ');
+    msgEl.innerHTML = iconText('x', 'สร้างไฟล์รูปภาพไม่สำเร็จ กรุณาลองใหม่');
     msgEl.style.display = 'block';
-  });
+  } finally {
+    if (imageBtn) imageBtn.disabled = false;
+  }
 }
 
 async function copyQuotationSummary() {
