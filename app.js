@@ -2741,18 +2741,22 @@ async function loadLibraryFromSources(sources, globalName) {
   throw lastError || new Error(`Unable to load ${globalName}`);
 }
 
-function loadPdfLibrary() {
-  return loadLibraryFromSources([
-    'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js',
-    'https://unpkg.com/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js'
-  ], 'html2pdf');
-}
-
 function loadImageLibrary() {
   return loadLibraryFromSources([
     'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
     'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js'
   ], 'html2canvas');
+}
+
+function loadJsPdfLibrary() {
+  return loadLibraryFromSources([
+    'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
+    'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js'
+  ], 'jspdf');
+}
+
+function loadPdfLibrary() {
+  return Promise.all([loadImageLibrary(), loadJsPdfLibrary()]);
 }
 
 // Quotation modal functions
@@ -3751,6 +3755,73 @@ function canvasToBlob(canvas, type = 'image/png', quality) {
   });
 }
 
+function renderQuotationCanvas(element, imageMap) {
+  return window.html2canvas(element, {
+    scale: 2,
+    useCORS: true,
+    allowTaint: false,
+    backgroundColor: '#ffffff',
+    logging: false,
+    scrollX: 0,
+    scrollY: 0,
+    width: element.scrollWidth,
+    height: element.scrollHeight,
+    windowWidth: element.scrollWidth,
+    windowHeight: element.scrollHeight,
+    onclone: clonedDocument => applyExportCloneFixes(clonedDocument, imageMap)
+  });
+}
+
+function canvasToPdfBlob(canvas) {
+  const JsPDF = window.jspdf?.jsPDF;
+  if (!JsPDF) throw new Error('ไม่พบไลบรารี่ jsPDF');
+
+  const pdf = new JsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 8;
+  const contentWidth = pageWidth - (margin * 2);
+  const contentHeight = pageHeight - (margin * 2);
+  const projectedHeight = canvas.height * contentWidth / canvas.width;
+
+  // ใบประเมินมาตรฐานที่สูงเกิน A4 เพียงเล็กน้อยให้อยู่หน้าเดียว
+  // เพื่อไม่ให้ส่วนสรุป/ลายเซ็นถูกตัดไปอยู่หน้าที่สองโดยไม่จำเป็น
+  if (projectedHeight <= contentHeight * 1.12) {
+    const scale = Math.min(contentWidth / canvas.width, contentHeight / canvas.height);
+    const renderWidth = canvas.width * scale;
+    const renderHeight = canvas.height * scale;
+    const x = (pageWidth - renderWidth) / 2;
+    pdf.addImage(canvas, 'PNG', x, margin, renderWidth, renderHeight, undefined, 'FAST');
+    return pdf.output('blob');
+  }
+
+  // เอกสารที่ยาวมากแบ่งเป็นหลายหน้า A4 โดยตัดจาก Canvas เต็มความกว้าง
+  const sliceHeight = Math.max(1, Math.floor(canvas.width * contentHeight / contentWidth));
+  let sourceY = 0;
+  let pageIndex = 0;
+  while (sourceY < canvas.height) {
+    const currentHeight = Math.min(sliceHeight, canvas.height - sourceY);
+    const pageCanvas = document.createElement('canvas');
+    pageCanvas.width = canvas.width;
+    pageCanvas.height = currentHeight;
+    const context = pageCanvas.getContext('2d');
+    if (!context) throw new Error('ไม่สามารถเตรียมหน้า PDF ได้');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+    context.drawImage(
+      canvas,
+      0, sourceY, canvas.width, currentHeight,
+      0, 0, pageCanvas.width, pageCanvas.height
+    );
+    if (pageIndex > 0) pdf.addPage();
+    const renderHeight = currentHeight * contentWidth / canvas.width;
+    pdf.addImage(pageCanvas, 'PNG', margin, margin, contentWidth, renderHeight, undefined, 'FAST');
+    sourceY += currentHeight;
+    pageIndex += 1;
+  }
+  return pdf.output('blob');
+}
+
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -3777,7 +3848,7 @@ async function generateQuotationPDF() {
 
   if (pdfBtn) pdfBtn.disabled = true;
 
-  if (typeof window.html2pdf === 'undefined') {
+  if (typeof window.html2canvas !== 'function' || !window.jspdf?.jsPDF) {
     msgEl.className = 'error';
     msgEl.textContent = 'กำลังโหลดไลบรารี่ PDF...';
     msgEl.style.display = 'block';
@@ -3793,45 +3864,21 @@ async function generateQuotationPDF() {
   }
   
   const element = document.getElementById('quotation-preview');
-  const baseOptions = {
-    margin: [8, 8, 8, 8],
-    filename: `quotation_${QE().sanitizeFilename(customerName)}_${Date.now()}.pdf`,
-    image: { type: 'png', quality: 1 },
-    pagebreak: {
-      mode: ['css', 'legacy'],
-      avoid: ['tr', '.quotation-preview-info', '.quotation-preview-summary']
-    },
-    html2canvas: {
-      scale: 2,
-      useCORS: true,
-      allowTaint: false,
-      backgroundColor: '#ffffff',
-      logging: false,
-      scrollX: 0,
-      scrollY: 0,
-      windowWidth: element.scrollWidth,
-      windowHeight: element.scrollHeight
-    },
-    jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4', compress: true }
-  };
+  const filename = `quotation_${QE().sanitizeFilename(customerName)}_${Date.now()}.pdf`;
 
   try {
     if (pdfBtn) pdfBtn.disabled = true;
     msgEl.className = '';
     msgEl.textContent = 'กำลังจัดรูปแบบและสร้างไฟล์ PDF...';
     msgEl.style.display = 'block';
-    await withQuotationExportLayout(element, async imageMap => {
-      const options = {
-        ...baseOptions,
-        html2canvas: {
-          ...baseOptions.html2canvas,
-          width: element.scrollWidth,
-          height: element.scrollHeight,
-          onclone: clonedDocument => applyExportCloneFixes(clonedDocument, imageMap)
-        }
-      };
-      await window.html2pdf().set(options).from(element).save();
+    const pdfBlob = await withQuotationExportLayout(element, async imageMap => {
+      if (typeof window.html2canvas !== 'function' || !window.jspdf?.jsPDF) {
+        throw new Error('โหลดส่วนประกอบสำหรับสร้าง PDF ไม่ครบ');
+      }
+      const canvas = await renderQuotationCanvas(element, imageMap);
+      return canvasToPdfBlob(canvas);
     });
+    downloadBlob(pdfBlob, filename);
 
     msgEl.className = 'success';
     msgEl.innerHTML = iconText('check', 'PDF ดาวน์โหลดสำเร็จ');
@@ -3884,20 +3931,7 @@ async function generateQuotationImage() {
     msgEl.className = '';
     msgEl.textContent = 'กำลังจัดรูปแบบและสร้างไฟล์รูปภาพ...';
     msgEl.style.display = 'block';
-    const canvas = await withQuotationExportLayout(element, imageMap => window.html2canvas(element, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: false,
-      backgroundColor: '#ffffff',
-      logging: false,
-      scrollX: 0,
-      scrollY: 0,
-      width: element.scrollWidth,
-      height: element.scrollHeight,
-      windowWidth: element.scrollWidth,
-      windowHeight: element.scrollHeight,
-      onclone: clonedDocument => applyExportCloneFixes(clonedDocument, imageMap)
-    }));
+    const canvas = await withQuotationExportLayout(element, imageMap => renderQuotationCanvas(element, imageMap));
     const blob = await canvasToBlob(canvas, 'image/png');
     downloadBlob(blob, `quotation_${QE().sanitizeFilename(customerName)}_${Date.now()}.png`);
 
