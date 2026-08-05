@@ -3416,13 +3416,12 @@ const themeBtn = document.getElementById('theme-btn');
 let tileLayer;
 let mapMode = 'map';
 const MAP_ATTRIBUTION = {
-  carto: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>',
+  osm: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
   esriImagery: 'Tiles &copy; <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>',
   esriLabels: 'Labels &copy; <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>'
 };
 const MAP_TILE_URLS = {
-  cartoDark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  cartoLight: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  osm: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
   esriImagery: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
   esriLabels: 'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'
 };
@@ -3467,13 +3466,10 @@ function makeTile() {
       })
     ]);
   }
-  return L.tileLayer(
-    isDark ? MAP_TILE_URLS.cartoDark : MAP_TILE_URLS.cartoLight,
-    {
-      ...TILE_OPTIONS,
-      attribution: MAP_ATTRIBUTION.carto
-    }
-  );
+  return L.tileLayer(MAP_TILE_URLS.osm, {
+    ...TILE_OPTIONS,
+    attribution: MAP_ATTRIBUTION.osm
+  });
 }
 
 themeBtn.addEventListener('click', () => { isDark = !isDark; applyTheme(); });
