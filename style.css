@@ -875,6 +875,13 @@ select.flt.active{
   margin:0 0 12px; border:1px solid; border-radius:9px; padding:9px 11px;
   font-size:11.5px; font-weight:700; line-height:1.5;
 }
+.building-doc-status.error{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
+.building-doc-connect{
+  flex:0 0 auto; border:1px solid currentColor; border-radius:8px; padding:7px 10px;
+  color:inherit; background:var(--surface); font:inherit; cursor:pointer;
+}
+.building-doc-connect:hover{filter:brightness(.97);}
+.building-doc-connect:disabled{opacity:.6; cursor:wait;}
 .building-doc-status.success{color:var(--green); background:var(--green-bg); border-color:color-mix(in oklab,var(--green) 30%,transparent);}
 .building-doc-status.error{color:var(--red); background:var(--red-bg); border-color:color-mix(in oklab,var(--red) 30%,transparent);}
 .building-doc-summary{

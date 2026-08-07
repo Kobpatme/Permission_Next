@@ -1147,6 +1147,7 @@ const BUILDING_DOCUMENT_CATEGORIES = Object.freeze({
 });
 const MAX_BUILDING_DOCUMENT_FILES = 1500;
 const DEFAULT_LOCAL_NAS_BRIDGE_URL = 'http://127.0.0.1:8766';
+const NAS_BRIDGE_PERMISSION_TIMEOUT_MS = 30000;
 const buildingDocumentsCache = new Map();
 let nasBridgeBasePromise = null;
 
@@ -1166,7 +1167,7 @@ async function findNasBridgeBase() {
 
   for (const base of candidates) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 1800);
+    const timeout = setTimeout(() => controller.abort(), NAS_BRIDGE_PERMISSION_TIMEOUT_MS);
     try {
       const response = await fetch(base + '/api/nas/health', {
         cache: 'no-store',
@@ -1277,7 +1278,10 @@ function renderBuildingDocuments(record, options = {}) {
   }
 
   const statusMessage = options.error
-    ? `<div class="building-doc-status error">${esc(options.error)}</div>`
+    ? `<div class="building-doc-status error">
+        <span>${esc(options.error)}</span>
+        <button class="building-doc-connect" type="button" data-document-retry>อนุญาตและเชื่อมต่อ NAS</button>
+      </div>`
     : options.message
       ? `<div class="building-doc-status success">${esc(options.message)}</div>`
       : '';
@@ -1320,6 +1324,17 @@ function renderBuildingDocuments(record, options = {}) {
 }
 
 document.getElementById('tab-documents').addEventListener('click', event => {
+  const retry = event.target.closest('[data-document-retry]');
+  if (retry) {
+    const record = findBuildingById(selectedId);
+    if (!record) return;
+    retry.disabled = true;
+    retry.textContent = 'กำลังเชื่อมต่อ...';
+    nasBridgeBasePromise = null;
+    loadBuildingDocuments(record);
+    return;
+  }
+
   const toggle = event.target.closest('.building-doc-category-head');
   if (!toggle || toggle.disabled) return;
   const list = document.getElementById(toggle.getAttribute('aria-controls'));
