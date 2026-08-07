@@ -1280,7 +1280,7 @@ function renderBuildingDocuments(record, options = {}) {
   const statusMessage = options.error
     ? `<div class="building-doc-status error">
         <span>${esc(options.error)}</span>
-        <button class="building-doc-connect" type="button" data-document-retry>อนุญาตและเชื่อมต่อ NAS</button>
+        <a class="building-doc-connect" href="${attrEsc(DEFAULT_LOCAL_NAS_BRIDGE_URL + '/')}" target="_blank" rel="noopener">เปิดระบบผ่าน NAS</a>
       </div>`
     : options.message
       ? `<div class="building-doc-status success">${esc(options.message)}</div>`
@@ -1324,17 +1324,6 @@ function renderBuildingDocuments(record, options = {}) {
 }
 
 document.getElementById('tab-documents').addEventListener('click', event => {
-  const retry = event.target.closest('[data-document-retry]');
-  if (retry) {
-    const record = findBuildingById(selectedId);
-    if (!record) return;
-    retry.disabled = true;
-    retry.textContent = 'กำลังเชื่อมต่อ...';
-    nasBridgeBasePromise = null;
-    loadBuildingDocuments(record);
-    return;
-  }
-
   const toggle = event.target.closest('.building-doc-category-head');
   if (!toggle || toggle.disabled) return;
   const list = document.getElementById(toggle.getAttribute('aria-controls'));
@@ -1364,7 +1353,6 @@ async function loadBuildingDocuments(record) {
   try {
     await syncBuildingDocuments(record);
   } catch (err) {
-    console.warn('Automatic building document search unavailable:', err?.message || err);
     if (String(selectedId) === String(record.id)) {
       renderBuildingDocuments(record, {
         data: buildingDocumentsCache.get(key),
@@ -1424,7 +1412,7 @@ async function syncBuildingDocuments(record) {
   }
   if (!selected) {
     nasBridgeBasePromise = null;
-    throw new Error('เชื่อมต่อเอกสาร NAS ไม่ได้ กรุณาอนุญาต Local Network Access ของเว็บไซต์ และตรวจว่า Permission NAS Bridge เปิดอยู่');
+    throw new Error('เบราว์เซอร์ไม่อนุญาตให้หน้า Deploy เชื่อมต่อ NAS กรุณาเปิดระบบผ่าน NAS');
   }
   if (selected.files.length > MAX_BUILDING_DOCUMENT_FILES) {
     throw new Error(`จำนวนไฟล์เกิน ${MAX_BUILDING_DOCUMENT_FILES.toLocaleString('th-TH')} รายการ กรุณาแยกโฟลเดอร์อาคารให้เล็กลง`);
