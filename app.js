@@ -267,6 +267,10 @@ function canManageBuildings() {
   return ['admin', 'permission'].includes(currentUser?.role);
 }
 
+function canViewBuildingDocuments() {
+  return ['admin', 'permission'].includes(currentUser?.role);
+}
+
 function setBoxMessage(id, message, isError = true) {
   const box = document.getElementById(id);
   if (!box) return;
@@ -351,10 +355,17 @@ function applyRoleUi() {
     btn.classList.toggle('role-hidden', !canManageBuildings());
   });
   document.getElementById('building-editor-delete-btn')?.classList.toggle('role-hidden', !canManageBuildings());
+  document.querySelectorAll('#drawer-tab-documents, #tab-documents').forEach(el => {
+    el.classList.toggle('role-hidden', !canViewBuildingDocuments());
+  });
+  if (!canViewBuildingDocuments() && document.getElementById('drawer-tab-documents')?.classList.contains('active')) {
+    switchTab('general');
+  }
 }
 
 function setCurrentUser(user) {
   currentUser = user ? sanitizeUser(user) : null;
+  if (!currentUser) clearBuildingDocumentsCache();
   if (currentUser) {
     document.body.classList.remove('auth-locked');
     saveSession(currentUser);
@@ -1108,6 +1119,7 @@ function svgIcon(name, cls = 'svg-icon') {
     horizontal: '<path d="M3 12h18"/><path d="m8 7-5 5 5 5"/><path d="m16 7 5 5-5 5"/>',
     ruler: '<path d="M4 17 17 4l3 3L7 20l-3-3Z"/><path d="m14 7 3 3"/><path d="m11 10 2 2"/><path d="m8 13 3 3"/>',
     file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/>',
+    download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
     image: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="10" r="1.5"/><path d="m21 15-5-5L5 19"/>',
     calc: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 11h.01"/><path d="M12 11h.01"/><path d="M16 11h.01"/><path d="M8 15h.01"/><path d="M12 15h.01"/><path d="M16 15h.01"/>',
     reset: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v6h6"/>',
@@ -1119,6 +1131,251 @@ function svgIcon(name, cls = 'svg-icon') {
 function iconText(name, text) {
   return `${svgIcon(name)}<span>${esc(text)}</span>`;
 }
+
+const BUILDING_DOCUMENT_CATEGORIES = Object.freeze({
+  dwg: { label: 'แบบ DWG', extensions: new Set(['dwg']), icon: 'file' },
+  pdf: { label: 'เอกสาร PDF', extensions: new Set(['pdf']), icon: 'file' },
+  image: {
+    label: 'รูปภาพ',
+    extensions: new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'tif', 'tiff', 'bmp', 'heic', 'heif']),
+    icon: 'image'
+  }
+});
+const MAX_BUILDING_DOCUMENT_FILES = 1500;
+const buildingDocumentsCache = new Map();
+
+function releaseBuildingDocumentUrls(data) {
+  for (const file of data?.files || []) {
+    if (String(file?.download_url || '').startsWith('blob:')) URL.revokeObjectURL(file.download_url);
+  }
+}
+
+function clearBuildingDocumentsCache() {
+  for (const data of buildingDocumentsCache.values()) releaseBuildingDocumentUrls(data);
+  buildingDocumentsCache.clear();
+}
+
+function cacheBuildingDocuments(key, data) {
+  releaseBuildingDocumentUrls(buildingDocumentsCache.get(key));
+  buildingDocumentsCache.set(key, data);
+}
+
+function buildingDocumentKey(record) {
+  return String(record?._docId || record?.id || '');
+}
+
+function formatDocumentSize(bytes) {
+  const value = Number(bytes) || 0;
+  if (value < 1024) return `${value.toLocaleString('th-TH')} B`;
+  if (value < 1024 ** 2) return `${(value / 1024).toLocaleString('th-TH', { maximumFractionDigits: 1 })} KB`;
+  if (value < 1024 ** 3) return `${(value / 1024 ** 2).toLocaleString('th-TH', { maximumFractionDigits: 1 })} MB`;
+  return `${(value / 1024 ** 3).toLocaleString('th-TH', { maximumFractionDigits: 1 })} GB`;
+}
+
+function formatDocumentTimestamp(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString('th-TH', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
+function normalizedBuildingDocumentData(raw, record) {
+  const files = (Array.isArray(raw?.files) ? raw.files : [])
+    .map(file => ({
+      name: String(file?.name || ''),
+      download_url: String(file?.download_url || ''),
+      category: String(file?.category || ''),
+      extension: String(file?.extension || '').toLowerCase(),
+      size: Number(file?.size) || 0,
+      modified_at: file?.modified_at || null
+    }))
+    .filter(file => file.name && BUILDING_DOCUMENT_CATEGORIES[file.category]);
+  return {
+    building_id: raw?.building_id || buildingDocumentKey(record),
+    files,
+    synced_at: raw?.synced_at || null,
+    synced_by: raw?.synced_by || ''
+  };
+}
+
+function buildingDocumentRowsHtml(files) {
+  return files.map(file => `
+    <div class="building-doc-row">
+      <span class="building-doc-type ${attrEsc(file.category)}">${esc(file.extension.toUpperCase())}</span>
+      <div class="building-doc-info">
+        <strong title="${attrEsc(file.name)}">${esc(file.name)}</strong>
+        <span>${esc(formatDocumentSize(file.size))} • ${esc(formatDocumentTimestamp(file.modified_at))}</span>
+      </div>
+      ${file.download_url ? `<a class="building-doc-download" href="${attrEsc(file.download_url)}" download="${attrEsc(file.name)}" title="ดาวน์โหลด ${attrEsc(file.name)}">${svgIcon('download')}<span>Download</span></a>` : ''}
+    </div>
+  `).join('');
+}
+
+function renderBuildingDocuments(record, options = {}) {
+  const panel = document.getElementById('tab-documents');
+  if (!panel) return;
+  if (!canViewBuildingDocuments()) {
+    panel.innerHTML = '';
+    return;
+  }
+
+  const key = buildingDocumentKey(record);
+  const data = normalizedBuildingDocumentData(options.data ?? buildingDocumentsCache.get(key), record);
+  const files = data.files.map((file, index) => ({ ...file, _index: index }));
+  if (options.loading) {
+    panel.innerHTML = '<div class="building-doc-empty">กำลังโหลดรายการเอกสาร...</div>';
+    return;
+  }
+
+  const statusMessage = options.error
+    ? `<div class="building-doc-status error">${esc(options.error)}</div>`
+    : options.message
+      ? `<div class="building-doc-status success">${esc(options.message)}</div>`
+      : '';
+
+  const categorySections = Object.entries(BUILDING_DOCUMENT_CATEGORIES).map(([category, config]) => {
+    const categoryFiles = files.filter(file => file.category === category);
+    return `
+      <section class="building-doc-category">
+        <button class="building-doc-category-head" type="button"
+          data-document-category="${attrEsc(category)}"
+          aria-expanded="false"
+          aria-controls="building-doc-list-${attrEsc(category)}"
+          ${categoryFiles.length ? '' : 'disabled'}>
+          <span>${svgIcon(config.icon)}${esc(config.label)}</span>
+          <span class="building-doc-category-meta">
+            <strong>${categoryFiles.length.toLocaleString('th-TH')}</strong>
+            <svg class="building-doc-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
+          </span>
+        </button>
+        <div class="building-doc-list" id="building-doc-list-${attrEsc(category)}" hidden></div>
+      </section>
+    `;
+  }).join('');
+
+  panel.innerHTML = `
+    <div class="building-doc-toolbar">
+      <div>
+        <div class="section-head">เอกสารอาคารจาก NAS</div>
+        <p>ระบบค้นหาเอกสารให้อัตโนมัติ และเปิดให้ดาวน์โหลดเฉพาะไฟล์ที่พบ</p>
+      </div>
+    </div>
+    ${statusMessage}
+    <div class="building-doc-summary">
+      <span>รวม <strong>${files.length.toLocaleString('th-TH')}</strong> ไฟล์</span>
+      <span>ตรวจล่าสุด <strong>${esc(formatDocumentTimestamp(data.synced_at))}</strong></span>
+      ${data.synced_by ? `<span>โดย <strong>${esc(data.synced_by)}</strong></span>` : ''}
+    </div>
+    ${categorySections}
+  `;
+}
+
+document.getElementById('tab-documents').addEventListener('click', event => {
+  const toggle = event.target.closest('.building-doc-category-head');
+  if (!toggle || toggle.disabled) return;
+  const list = document.getElementById(toggle.getAttribute('aria-controls'));
+  if (!list) return;
+
+  const willExpand = toggle.getAttribute('aria-expanded') !== 'true';
+  toggle.setAttribute('aria-expanded', String(willExpand));
+  toggle.closest('.building-doc-category')?.classList.toggle('expanded', willExpand);
+  list.hidden = !willExpand;
+
+  if (willExpand && !list.dataset.rendered) {
+    const record = findBuildingById(selectedId);
+    const data = normalizedBuildingDocumentData(
+      buildingDocumentsCache.get(buildingDocumentKey(record)),
+      record
+    );
+    const category = toggle.dataset.documentCategory;
+    list.innerHTML = buildingDocumentRowsHtml(data.files.filter(file => file.category === category));
+    list.dataset.rendered = 'true';
+  }
+});
+
+async function loadBuildingDocuments(record) {
+  if (!canViewBuildingDocuments()) return;
+  const key = buildingDocumentKey(record);
+  if (!key) return;
+  try {
+    await syncBuildingDocuments(record);
+  } catch (err) {
+    console.error('Automatic building document search failed:', err);
+    if (String(selectedId) === String(record.id)) {
+      renderBuildingDocuments(record, {
+        data: buildingDocumentsCache.get(key),
+        error: 'ค้นหารายการเอกสารอัตโนมัติไม่สำเร็จ: ' + err.message
+      });
+    }
+  }
+}
+
+async function discoverBuildingDocumentsFromNas(record) {
+  const query = new URLSearchParams({
+    nameTh: record?.name_th || '',
+    nameEng: record?.name_eng || '',
+    area: record?.area || ''
+  });
+  let response;
+  try {
+    response = await fetch('/api/nas/building-documents?' + query.toString(), { cache: 'no-store' });
+  } catch {
+    return null;
+  }
+  if (response.headers.get('X-Permission-NAS-Bridge') !== '1') return null;
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'ค้นหาโฟลเดอร์อาคารใน NAS ไม่สำเร็จ');
+  return {
+    files: Array.isArray(result.files) ? result.files : []
+  };
+}
+
+async function syncBuildingDocuments(record) {
+  if (!canViewBuildingDocuments()) throw new Error('บัญชีนี้ไม่มีสิทธิ์ดูหรือค้นหาเอกสาร');
+  const key = buildingDocumentKey(record);
+  if (!key) throw new Error('ไม่พบรหัสอาคารสำหรับค้นหาเอกสาร');
+  const currentData = normalizedBuildingDocumentData(buildingDocumentsCache.get(key), record);
+  if (String(selectedId) === String(record.id)) {
+    renderBuildingDocuments(record, { data: currentData, syncing: true });
+  }
+
+  let selected;
+  try {
+    selected = await discoverBuildingDocumentsFromNas(record);
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      if (String(selectedId) === String(record.id)) renderBuildingDocuments(record, { data: currentData });
+      return;
+    }
+    throw err;
+  }
+  if (!selected) throw new Error('กรุณาเปิดระบบผ่าน local dev server เพื่อค้นหาเอกสารจาก NAS');
+  if (selected.files.length > MAX_BUILDING_DOCUMENT_FILES) {
+    throw new Error(`จำนวนไฟล์เกิน ${MAX_BUILDING_DOCUMENT_FILES.toLocaleString('th-TH')} รายการ กรุณาแยกโฟลเดอร์อาคารให้เล็กลง`);
+  }
+  if (!selected.files.length) {
+    throw new Error('ไม่พบไฟล์ DWG, PDF หรือรูปภาพในโฟลเดอร์ที่เลือก');
+  }
+  const files = selected.files
+    .map(file => ({ ...file }))
+    .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name, 'th'));
+  const payload = {
+    building_id: record.id,
+    files,
+    synced_at: new Date().toISOString()
+  };
+  cacheBuildingDocuments(key, payload);
+  if (String(selectedId) === String(record.id)) {
+    renderBuildingDocuments(record, {
+      data: payload,
+      message: `ค้นหาเอกสารจาก NAS สำเร็จ ${files.length.toLocaleString('th-TH')} ไฟล์`
+    });
+  }
+}
+
 function formatPhone(p) {
   const raw = String(p).trim();
   if (!raw || raw === '-') return raw;
@@ -1276,12 +1533,16 @@ function openDrawer(r) {
        </table>`
     : `<div class="no-fee">ไม่มีข้อมูลค่าธรรมเนียม</div>`;
 
+  if (canViewBuildingDocuments()) loadBuildingDocuments(r);
+  else document.getElementById('tab-documents').innerHTML = '';
+
   // Reset to first tab
   switchTab('general');
 }
 window.openDrawer = openDrawer;
 
 function switchTab(name) {
+  if (name === 'documents' && !canViewBuildingDocuments()) name = 'general';
   document.querySelectorAll('.dtab').forEach(t => {
     const active = t.dataset.tab === name;
     t.classList.toggle('active', active);
@@ -1301,7 +1562,8 @@ document.getElementById('drawer-tabs').addEventListener('click', e => {
 });
 document.getElementById('drawer-tabs').addEventListener('keydown', e => {
   if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
-  const tabs = [...e.currentTarget.querySelectorAll('[role="tab"]')];
+  const tabs = [...e.currentTarget.querySelectorAll('[role="tab"]')]
+    .filter(tab => !tab.classList.contains('role-hidden'));
   const currentIndex = tabs.indexOf(document.activeElement);
   if (currentIndex < 0) return;
   e.preventDefault();
