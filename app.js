@@ -250,8 +250,6 @@ const FEE_LABELS = {
 let APP_USERS = [];
 let usersUnsub = null;
 let currentUser = null;
-let nasDocumentsAvailable = false;
-let nasAvailabilityRequestId = 0;
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
@@ -371,8 +369,6 @@ function applyRoleUi() {
 
 function setCurrentUser(user) {
   currentUser = user ? sanitizeUser(user) : null;
-  nasDocumentsAvailable = false;
-  nasAvailabilityRequestId += 1;
   if (!currentUser) clearBuildingDocumentsCache();
   if (currentUser) {
     document.body.classList.remove('auth-locked');
@@ -382,7 +378,6 @@ function setCurrentUser(user) {
     clearSession();
   }
   applyRoleUi();
-  if (hasBuildingDocumentRole()) refreshNasDocumentAvailability();
 }
 
 async function ensureDefaultAdminUser() {
@@ -1195,28 +1190,6 @@ function getNasBridgeBase() {
   return nasBridgeBasePromise;
 }
 
-async function refreshNasDocumentAvailability() {
-  if (!hasBuildingDocumentRole()) return;
-  const requestId = ++nasAvailabilityRequestId;
-  const expectedEmail = currentUser?.email;
-  nasBridgeBasePromise = null;
-  const bridgeBase = await getNasBridgeBase();
-  if (requestId !== nasAvailabilityRequestId || currentUser?.email !== expectedEmail) return;
-
-  nasDocumentsAvailable = Boolean(bridgeBase);
-  applyRoleUi();
-  if (!nasDocumentsAvailable) {
-    clearBuildingDocumentsCache();
-    return;
-  }
-  const record = findBuildingById(selectedId);
-  if (record) loadBuildingDocuments(record);
-}
-
-window.addEventListener('focus', () => {
-  if (hasBuildingDocumentRole() && !nasDocumentsAvailable) refreshNasDocumentAvailability();
-});
-
 function releaseBuildingDocumentUrls(data) {
   for (const file of data?.files || []) {
     if (String(file?.download_url || '').startsWith('blob:')) URL.revokeObjectURL(file.download_url);
@@ -1376,7 +1349,7 @@ async function loadBuildingDocuments(record) {
   try {
     await syncBuildingDocuments(record);
   } catch (err) {
-    console.error('Automatic building document search failed:', err);
+    console.warn('Automatic building document search unavailable:', err?.message || err);
     if (String(selectedId) === String(record.id)) {
       renderBuildingDocuments(record, {
         data: buildingDocumentsCache.get(key),
@@ -1436,7 +1409,7 @@ async function syncBuildingDocuments(record) {
   }
   if (!selected) {
     nasBridgeBasePromise = null;
-    throw new Error('ไม่พบ Permission NAS Bridge บนเครื่อง กรุณาเปิด start-nas-bridge.cmd แล้วลองใหม่');
+    throw new Error('เชื่อมต่อเอกสาร NAS ไม่ได้ กรุณาอนุญาต Local Network Access ของเว็บไซต์ และตรวจว่า Permission NAS Bridge เปิดอยู่');
   }
   if (selected.files.length > MAX_BUILDING_DOCUMENT_FILES) {
     throw new Error(`จำนวนไฟล์เกิน ${MAX_BUILDING_DOCUMENT_FILES.toLocaleString('th-TH')} รายการ กรุณาแยกโฟลเดอร์อาคารให้เล็กลง`);
