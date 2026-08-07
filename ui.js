@@ -22,6 +22,9 @@
     selectedId = null;
     document.querySelectorAll('.list-item').forEach(el=>el.classList.remove('selected'));
     allMarkers.forEach(({marker,data:d})=>marker.setIcon(makeIcon(statusColor(d.status),false)));
+    // Re-render the current filtered set so a marker selected from search is
+    // restored to the map after the detail modal closes.
+    if (typeof applyFilters === 'function') applyFilters();
     document.removeEventListener('keydown', onEsc);
   }
   function onEsc(e){ if(e.key==='Escape') closeModal(); }
