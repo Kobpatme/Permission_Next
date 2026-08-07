@@ -5,9 +5,13 @@ $serverScript = Join-Path $PSScriptRoot 'dev-server.js'
 
 try {
   $health = Invoke-RestMethod -Uri $bridgeHealthUrl -TimeoutSec 2
-  if ($health.status -eq 'ok') {
+  if ($health.status -eq 'ok' -and $health.nas_access -eq $true) {
     Write-Host 'Permission NAS Bridge is already running.' -ForegroundColor Green
     exit 0
+  }
+  if ($health.status -eq 'ok' -and $health.nas_access -ne $true) {
+    Write-Error 'Permission NAS Bridge is running, but this Windows account cannot access the NAS drive.'
+    exit 1
   }
 } catch {
   # The bridge is not running yet.
@@ -40,7 +44,7 @@ for ($attempt = 0; $attempt -lt 20; $attempt++) {
   Start-Sleep -Milliseconds 250
   try {
     $health = Invoke-RestMethod -Uri $bridgeHealthUrl -TimeoutSec 2
-    if ($health.status -eq 'ok') {
+    if ($health.status -eq 'ok' -and $health.nas_access -eq $true) {
       Write-Host 'Permission NAS Bridge started successfully.' -ForegroundColor Green
       exit 0
     }

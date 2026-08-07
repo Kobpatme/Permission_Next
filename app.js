@@ -250,6 +250,8 @@ const FEE_LABELS = {
 let APP_USERS = [];
 let usersUnsub = null;
 let currentUser = null;
+let nasDocumentsAvailable = false;
+let nasAvailabilityRequestId = 0;
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
@@ -267,8 +269,12 @@ function canManageBuildings() {
   return ['admin', 'permission'].includes(currentUser?.role);
 }
 
-function canViewBuildingDocuments() {
+function hasBuildingDocumentRole() {
   return ['admin', 'permission'].includes(currentUser?.role);
+}
+
+function canViewBuildingDocuments() {
+  return hasBuildingDocumentRole() && nasDocumentsAvailable;
 }
 
 function setBoxMessage(id, message, isError = true) {
@@ -365,6 +371,8 @@ function applyRoleUi() {
 
 function setCurrentUser(user) {
   currentUser = user ? sanitizeUser(user) : null;
+  nasDocumentsAvailable = false;
+  nasAvailabilityRequestId += 1;
   if (!currentUser) clearBuildingDocumentsCache();
   if (currentUser) {
     document.body.classList.remove('auth-locked');
@@ -374,6 +382,7 @@ function setCurrentUser(user) {
     clearSession();
   }
   applyRoleUi();
+  if (hasBuildingDocumentRole()) refreshNasDocumentAvailability();
 }
 
 async function ensureDefaultAdminUser() {
@@ -1170,7 +1179,8 @@ async function findNasBridgeBase() {
         targetAddressSpace: 'loopback',
         signal: controller.signal
       });
-      if (response.ok && response.headers.get('X-Permission-NAS-Bridge') === '1') return base;
+      const health = response.ok ? await response.json() : null;
+      if (response.headers.get('X-Permission-NAS-Bridge') === '1' && health?.nas_access === true) return base;
     } catch (err) {
       console.warn('NAS Bridge candidate unavailable:', base, err?.message || err);
     } finally {
@@ -1184,6 +1194,28 @@ function getNasBridgeBase() {
   if (!nasBridgeBasePromise) nasBridgeBasePromise = findNasBridgeBase();
   return nasBridgeBasePromise;
 }
+
+async function refreshNasDocumentAvailability() {
+  if (!hasBuildingDocumentRole()) return;
+  const requestId = ++nasAvailabilityRequestId;
+  const expectedEmail = currentUser?.email;
+  nasBridgeBasePromise = null;
+  const bridgeBase = await getNasBridgeBase();
+  if (requestId !== nasAvailabilityRequestId || currentUser?.email !== expectedEmail) return;
+
+  nasDocumentsAvailable = Boolean(bridgeBase);
+  applyRoleUi();
+  if (!nasDocumentsAvailable) {
+    clearBuildingDocumentsCache();
+    return;
+  }
+  const record = findBuildingById(selectedId);
+  if (record) loadBuildingDocuments(record);
+}
+
+window.addEventListener('focus', () => {
+  if (hasBuildingDocumentRole() && !nasDocumentsAvailable) refreshNasDocumentAvailability();
+});
 
 function releaseBuildingDocumentUrls(data) {
   for (const file of data?.files || []) {

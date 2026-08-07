@@ -295,6 +295,17 @@ async function handleNasDocuments(req, res, requestUrl) {
   }
 }
 
+async function handleNasHealth(req, res) {
+  let nasAccess = false;
+  try {
+    await fs.promises.access(NAS_ROOT, fs.constants.R_OK);
+    nasAccess = true;
+  } catch {
+    nasAccess = false;
+  }
+  sendJson(req, res, 200, { status: 'ok', version: 2, nas_access: nasAccess });
+}
+
 function serveStatic(res, requestUrl) {
   let relativePath = decodeURIComponent(requestUrl.pathname);
   if (relativePath === '/') relativePath = '/Permission_Next.html';
@@ -332,7 +343,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (requestUrl.pathname === '/api/nas/health') {
-    sendJson(req, res, 200, { status: 'ok', version: 1 });
+    await handleNasHealth(req, res);
     return;
   }
   if (requestUrl.pathname === '/api/nas/building-documents') {
