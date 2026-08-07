@@ -1142,7 +1142,48 @@ const BUILDING_DOCUMENT_CATEGORIES = Object.freeze({
   }
 });
 const MAX_BUILDING_DOCUMENT_FILES = 1500;
+const DEFAULT_LOCAL_NAS_BRIDGE_URL = 'http://127.0.0.1:8766';
 const buildingDocumentsCache = new Map();
+let nasBridgeBasePromise = null;
+
+function normalizeNasBridgeBase(value) {
+  return String(value || '').trim().replace(/\/$/, '');
+}
+
+async function findNasBridgeBase() {
+  const configuredBase = normalizeNasBridgeBase(window.PERMISSION_NAS_BRIDGE_URL);
+  const currentIsBridge = ['127.0.0.1', 'localhost'].includes(location.hostname)
+    && location.port === '8766';
+  const candidates = [...new Set([
+    configuredBase,
+    currentIsBridge ? location.origin : '',
+    DEFAULT_LOCAL_NAS_BRIDGE_URL
+  ].filter(Boolean))];
+
+  for (const base of candidates) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1800);
+    try {
+      const response = await fetch(base + '/api/nas/health', {
+        cache: 'no-store',
+        mode: 'cors',
+        targetAddressSpace: 'loopback',
+        signal: controller.signal
+      });
+      if (response.ok && response.headers.get('X-Permission-NAS-Bridge') === '1') return base;
+    } catch (err) {
+      console.warn('NAS Bridge candidate unavailable:', base, err?.message || err);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  return null;
+}
+
+function getNasBridgeBase() {
+  if (!nasBridgeBasePromise) nasBridgeBasePromise = findNasBridgeBase();
+  return nasBridgeBasePromise;
+}
 
 function releaseBuildingDocumentUrls(data) {
   for (const file of data?.files || []) {
@@ -1314,6 +1355,8 @@ async function loadBuildingDocuments(record) {
 }
 
 async function discoverBuildingDocumentsFromNas(record) {
+  const bridgeBase = await getNasBridgeBase();
+  if (!bridgeBase) return null;
   const query = new URLSearchParams({
     nameTh: record?.name_th || '',
     nameEng: record?.name_eng || '',
@@ -1321,7 +1364,11 @@ async function discoverBuildingDocumentsFromNas(record) {
   });
   let response;
   try {
-    response = await fetch('/api/nas/building-documents?' + query.toString(), { cache: 'no-store' });
+    response = await fetch(bridgeBase + '/api/nas/building-documents?' + query.toString(), {
+      cache: 'no-store',
+      mode: 'cors',
+      targetAddressSpace: 'loopback'
+    });
   } catch {
     return null;
   }
@@ -1329,7 +1376,10 @@ async function discoverBuildingDocumentsFromNas(record) {
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || 'ค้นหาโฟลเดอร์อาคารใน NAS ไม่สำเร็จ');
   return {
-    files: Array.isArray(result.files) ? result.files : []
+    files: (Array.isArray(result.files) ? result.files : []).map(file => ({
+      ...file,
+      download_url: file.download_url ? new URL(file.download_url, bridgeBase + '/').href : ''
+    }))
   };
 }
 
@@ -1352,7 +1402,10 @@ async function syncBuildingDocuments(record) {
     }
     throw err;
   }
-  if (!selected) throw new Error('กรุณาเปิดระบบผ่าน local dev server เพื่อค้นหาเอกสารจาก NAS');
+  if (!selected) {
+    nasBridgeBasePromise = null;
+    throw new Error('ไม่พบ Permission NAS Bridge บนเครื่อง กรุณาเปิด start-nas-bridge.cmd แล้วลองใหม่');
+  }
   if (selected.files.length > MAX_BUILDING_DOCUMENT_FILES) {
     throw new Error(`จำนวนไฟล์เกิน ${MAX_BUILDING_DOCUMENT_FILES.toLocaleString('th-TH')} รายการ กรุณาแยกโฟลเดอร์อาคารให้เล็กลง`);
   }

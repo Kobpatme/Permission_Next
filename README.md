@@ -50,6 +50,23 @@ node dev-server.js
 
 Then open `http://127.0.0.1:8766`. Opening a building automatically asks the local NAS bridge to locate matching files by Thai/English name and Area. The UI exposes only file information and Download links; it does not expose folder selection, folder paths, or path-copy controls.
 
+### Use NAS documents from the deployed Cloudflare Pages site
+
+Cloudflare cannot read a Windows mapped drive. Each team PC that needs the Documents tab must therefore run the local bridge while using the deployed site:
+
+1. Keep this repository folder on the PC and install Node.js.
+2. Double-click `start-nas-bridge.cmd` once after signing in to Windows.
+3. Open the deployed HTTPS site normally. It discovers `http://127.0.0.1:8766` automatically.
+
+The bridge is bound to loopback only, supports CORS/Private Network preflight, and accepts the production origin `https://permission-next.pages.dev` plus its Cloudflare preview subdomains. Other web origins receive HTTP 403. If the deployed site uses a custom domain, start the bridge with that exact origin in `NAS_BRIDGE_ALLOWED_ORIGINS`, for example:
+
+```powershell
+$env:NAS_BRIDGE_ALLOWED_ORIGINS='https://permission.example.com'
+node dev-server.js
+```
+
+Download links use short-lived opaque tokens and never expose the mapped-drive path to the deployed page.
+
 The browser login is still a lightweight client-side access layer. The NAS ACL must independently restrict the source folder to the Admin/Permission groups.
 
 This is a lightweight client-side access layer, not a replacement for server-side security rules.

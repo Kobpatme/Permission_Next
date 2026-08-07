@@ -5,12 +5,20 @@ const crypto = require('crypto');
 const { URL } = require('url');
 
 const HOST = process.env.DEV_HOST || '127.0.0.1';
-const PORT = Number(process.env.PORT) || 8766;
+const PORT = Number(process.env.PERMISSION_NEXT_PORT || process.env.PORT) || 8766;
 const WEB_ROOT = __dirname;
 const NAS_ROOT = process.env.NAS_BUILDING_ROOT
   || 'P:\\BBG\\Outside Plant&Coordination\\!!!_Data Base Building Drawing';
 const INDEX_TTL_MS = 60_000;
 const DOWNLOAD_TOKEN_TTL_MS = 15 * 60_000;
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://permission-next.pages.dev',
+  'https://kobpatme.github.io'
+];
+const ALLOWED_ORIGINS = new Set([
+  ...DEFAULT_ALLOWED_ORIGINS,
+  ...String(process.env.NAS_BRIDGE_ALLOWED_ORIGINS || '').split(',')
+].map(origin => origin.trim().replace(/\/$/, '')).filter(Boolean));
 const SUPPORTED_EXTENSIONS = new Map([
   ['.dwg', 'dwg'], ['.pdf', 'pdf'], ['.jpg', 'image'], ['.jpeg', 'image'],
   ['.png', 'image'], ['.webp', 'image'], ['.gif', 'image'], ['.tif', 'image'],
@@ -30,6 +38,48 @@ const MIME_TYPES = {
 let folderIndex = [];
 let folderIndexAt = 0;
 const downloadTokens = new Map();
+
+function isLoopbackOrigin(origin) {
+  try {
+    const url = new URL(origin);
+    return ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isPermissionPagesOrigin(origin) {
+  try {
+    const url = new URL(origin);
+    return url.protocol === 'https:' && (
+      url.hostname === 'permission-next.pages.dev'
+      || url.hostname.endsWith('.permission-next.pages.dev')
+    );
+  } catch {
+    return false;
+  }
+}
+
+function corsHeaders(req) {
+  const origin = String(req.headers.origin || '').replace(/\/$/, '');
+  if (!origin || (!ALLOWED_ORIGINS.has(origin) && !isLoopbackOrigin(origin) && !isPermissionPagesOrigin(origin))) return {};
+  const headers = {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400',
+    'Vary': 'Origin'
+  };
+  if (String(req.headers['access-control-request-private-network']).toLowerCase() === 'true') {
+    headers['Access-Control-Allow-Private-Network'] = 'true';
+  }
+  return headers;
+}
+
+function isOriginAllowed(req) {
+  const origin = String(req.headers.origin || '').replace(/\/$/, '');
+  return !origin || ALLOWED_ORIGINS.has(origin) || isLoopbackOrigin(origin) || isPermissionPagesOrigin(origin);
+}
 
 function createDownloadUrl(fullPath) {
   const now = Date.now();
@@ -179,19 +229,19 @@ function contentDispositionFilename(fileName) {
   return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
 }
 
-async function handleNasDownload(res, requestUrl) {
+async function handleNasDownload(req, res, requestUrl) {
   const token = requestUrl.searchParams.get('token') || '';
   const tokenEntry = downloadTokens.get(token);
   if (!tokenEntry || tokenEntry.expiresAt <= Date.now()) {
     downloadTokens.delete(token);
-    sendJson(res, 404, { error: 'ลิงก์ดาวน์โหลดไม่ถูกต้องหรือหมดอายุ' });
+    sendJson(req, res, 404, { error: 'ลิงก์ดาวน์โหลดไม่ถูกต้องหรือหมดอายุ' });
     return;
   }
   const fullPath = tokenEntry.fullPath;
   const pathWithinNas = path.relative(NAS_ROOT, fullPath);
   const extension = path.extname(fullPath).toLowerCase();
   if (pathWithinNas.startsWith('..') || path.isAbsolute(pathWithinNas) || !SUPPORTED_EXTENSIONS.has(extension)) {
-    sendJson(res, 403, { error: 'ไม่อนุญาตให้ดาวน์โหลดไฟล์นี้' });
+    sendJson(req, res, 403, { error: 'ไม่อนุญาตให้ดาวน์โหลดไฟล์นี้' });
     return;
   }
   try {
@@ -202,24 +252,26 @@ async function handleNasDownload(res, requestUrl) {
       'Content-Length': stat.size,
       'Content-Disposition': contentDispositionFilename(path.basename(fullPath)),
       'Cache-Control': 'private, no-store',
-      'X-Content-Type-Options': 'nosniff'
+      'X-Content-Type-Options': 'nosniff',
+      ...corsHeaders(req)
     });
     fs.createReadStream(fullPath).pipe(res);
   } catch {
-    sendJson(res, 404, { error: 'ไม่พบไฟล์ที่ต้องการดาวน์โหลด' });
+    sendJson(req, res, 404, { error: 'ไม่พบไฟล์ที่ต้องการดาวน์โหลด' });
   }
 }
 
-function sendJson(res, statusCode, payload) {
+function sendJson(req, res, statusCode, payload) {
   res.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
-    'X-Permission-NAS-Bridge': '1'
+    'X-Permission-NAS-Bridge': '1',
+    ...corsHeaders(req)
   });
   res.end(JSON.stringify(payload));
 }
 
-async function handleNasDocuments(res, requestUrl) {
+async function handleNasDocuments(req, res, requestUrl) {
   try {
     const query = requestUrl.searchParams;
     const folder = await findBuildingFolder({
@@ -228,16 +280,16 @@ async function handleNasDocuments(res, requestUrl) {
       area: query.get('area') || ''
     });
     if (!folder) {
-      sendJson(res, 404, {
+      sendJson(req, res, 404, {
         error: 'ไม่พบเอกสารอาคารที่ตรงกับชื่อและ Area ใน NAS'
       });
       return;
     }
-    sendJson(res, 200, {
+    sendJson(req, res, 200, {
       files: await scanSupportedFiles(folder)
     });
   } catch (err) {
-    sendJson(res, err.code === 'NAS_ROOT_UNAVAILABLE' ? 503 : 500, {
+    sendJson(req, res, err.code === 'NAS_ROOT_UNAVAILABLE' ? 503 : 500, {
       error: err.message || 'อ่านข้อมูล NAS ไม่สำเร็จ'
     });
   }
@@ -269,12 +321,26 @@ function serveStatic(res, requestUrl) {
 
 const server = http.createServer(async (req, res) => {
   const requestUrl = new URL(req.url, 'http://' + req.headers.host);
+  const isNasApi = requestUrl.pathname.startsWith('/api/nas/');
+  if (isNasApi && !isOriginAllowed(req)) {
+    sendJson(req, res, 403, { error: 'Origin นี้ไม่ได้รับอนุญาตให้เรียก NAS Bridge' });
+    return;
+  }
+  if (isNasApi && req.method === 'OPTIONS') {
+    res.writeHead(204, corsHeaders(req));
+    res.end();
+    return;
+  }
+  if (requestUrl.pathname === '/api/nas/health') {
+    sendJson(req, res, 200, { status: 'ok', version: 1 });
+    return;
+  }
   if (requestUrl.pathname === '/api/nas/building-documents') {
-    await handleNasDocuments(res, requestUrl);
+    await handleNasDocuments(req, res, requestUrl);
     return;
   }
   if (requestUrl.pathname === '/api/nas/download') {
-    await handleNasDownload(res, requestUrl);
+    await handleNasDownload(req, res, requestUrl);
     return;
   }
   serveStatic(res, requestUrl);
@@ -287,4 +353,5 @@ server.on('error', err => {
 
 server.listen(PORT, HOST, () => {
   console.log('Permission Next dev server: http://' + HOST + ':' + PORT);
+  console.log('Allowed deployed origins: ' + [...ALLOWED_ORIGINS].join(', '));
 });
