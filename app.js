@@ -1783,6 +1783,22 @@ function getFiltered() {
 
 function applyFilters() { render(getFiltered()); }
 
+let markerRestoreFrame = null;
+function restoreVisibleMarkers() {
+  if (markerRestoreFrame !== null) cancelAnimationFrame(markerRestoreFrame);
+  markerRestoreFrame = requestAnimationFrame(() => {
+    markerRestoreFrame = null;
+    applyFilters();
+    map.invalidateSize({ pan: false });
+    if (typeof layerGroup.refreshClusters === 'function') layerGroup.refreshClusters();
+  });
+}
+window.restoreVisibleMarkers = restoreVisibleMarkers;
+
+// Leaflet/MarkerCluster can temporarily detach the selected marker while a
+// popup is closing. Rebuild the active filtered layer on the next paint.
+map.on('popupclose', restoreVisibleMarkers);
+
 function debounce(fn, delay = 160) {
   let timer;
   return (...args) => {
