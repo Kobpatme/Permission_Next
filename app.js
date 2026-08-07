@@ -274,7 +274,7 @@ function hasBuildingDocumentRole() {
 }
 
 function canViewBuildingDocuments() {
-  return hasBuildingDocumentRole() && nasDocumentsAvailable;
+  return hasBuildingDocumentRole();
 }
 
 function setBoxMessage(id, message, isError = true) {
