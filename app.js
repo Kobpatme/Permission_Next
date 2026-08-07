@@ -729,7 +729,8 @@ if (typeof L === 'undefined') {
 let isDark = false;
 const themeBtn = document.getElementById('theme-btn');
 let tileLayer;
-let mapMode = 'map';
+// Keep the default map mode explicit: Mod2 uses the standard OpenStreetMap tiles.
+let mapMode = 'osm';
 const MAP_ATTRIBUTION = {
   osm: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
   esriImagery: 'Tiles &copy; <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>',
@@ -783,6 +784,7 @@ function makeTile() {
   }
   return L.tileLayer(MAP_TILE_URLS.osm, {
     ...TILE_OPTIONS,
+    noWrap: true,
     attribution: MAP_ATTRIBUTION.osm
   });
 }
