@@ -1280,7 +1280,7 @@ function renderBuildingDocuments(record, options = {}) {
   const statusMessage = options.error
     ? `<div class="building-doc-status error">
         <span>${esc(options.error)}</span>
-        <a class="building-doc-connect" href="${attrEsc(DEFAULT_LOCAL_NAS_BRIDGE_URL + '/')}" target="_blank" rel="noopener">เปิดระบบผ่าน NAS</a>
+        <button class="building-doc-connect" type="button" data-document-retry>ลองเชื่อมต่ออีกครั้ง</button>
       </div>`
     : options.message
       ? `<div class="building-doc-status success">${esc(options.message)}</div>`
@@ -1324,6 +1324,17 @@ function renderBuildingDocuments(record, options = {}) {
 }
 
 document.getElementById('tab-documents').addEventListener('click', event => {
+  const retry = event.target.closest('[data-document-retry]');
+  if (retry) {
+    const record = findBuildingById(selectedId);
+    if (!record) return;
+    retry.disabled = true;
+    retry.textContent = 'กำลังเชื่อมต่อ...';
+    nasBridgeBasePromise = null;
+    loadBuildingDocuments(record);
+    return;
+  }
+
   const toggle = event.target.closest('.building-doc-category-head');
   if (!toggle || toggle.disabled) return;
   const list = document.getElementById(toggle.getAttribute('aria-controls'));
@@ -1412,7 +1423,7 @@ async function syncBuildingDocuments(record) {
   }
   if (!selected) {
     nasBridgeBasePromise = null;
-    throw new Error('เบราว์เซอร์ไม่อนุญาตให้หน้า Deploy เชื่อมต่อ NAS กรุณาเปิดระบบผ่าน NAS');
+    throw new Error('เชื่อมต่อ Permission NAS Bridge ไม่ได้ กรุณาติดต่อ IT เพื่อติดตั้ง Bridge และ Browser Policy บนเครื่องนี้');
   }
   if (selected.files.length > MAX_BUILDING_DOCUMENT_FILES) {
     throw new Error(`จำนวนไฟล์เกิน ${MAX_BUILDING_DOCUMENT_FILES.toLocaleString('th-TH')} รายการ กรุณาแยกโฟลเดอร์อาคารให้เล็กลง`);

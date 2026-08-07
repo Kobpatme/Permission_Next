@@ -54,9 +54,10 @@ Then open `http://127.0.0.1:8766`. Opening a building automatically asks the loc
 
 Cloudflare cannot read a Windows mapped drive. Each team PC that needs the Documents tab must therefore run the local bridge while using the deployed site:
 
-1. Keep this repository folder on the PC and install Node.js.
-2. Double-click `install-nas-bridge-startup.cmd` once. It creates a current-user Startup shortcut and starts the bridge immediately without requiring administrator rights. Use `start-nas-bridge.cmd` when you only want to start it for the current Windows session.
-3. Open the deployed HTTPS site normally. It discovers `http://127.0.0.1:8766` automatically.
+1. Keep the bridge package on the PC and install Node.js.
+2. Double-click `install-nas-bridge-startup.cmd` once for each Windows user. It creates a current-user Startup shortcut and starts the bridge immediately without requiring administrator rights. Use `start-nas-bridge.cmd` when you only want to start it for the current Windows session.
+3. Ask IT to run `install-nas-browser-policy-admin.cmd` once per PC as administrator, or deploy the same policy by Group Policy. The installer adds only `https://permission-next.pages.dev` to `LocalNetworkAccessAllowedForUrls` for Chrome and Microsoft Edge; it preserves any existing policy list values.
+4. Close and reopen the browser, then open `https://permission-next.pages.dev/Permission_Next` normally. The deployed app discovers the background bridge at `http://127.0.0.1:8766` automatically; users do not open the localhost app.
 
 The bridge is bound to loopback only, supports CORS/Private Network preflight, and accepts the production origin `https://permission-next.pages.dev` plus its Cloudflare preview subdomains. Other web origins receive HTTP 403. If the deployed site uses a custom domain, start the bridge with that exact origin in `NAS_BRIDGE_ALLOWED_ORIGINS`, for example:
 
@@ -67,7 +68,7 @@ node dev-server.js
 
 Download links use short-lived opaque tokens and never expose the mapped-drive path to the deployed page.
 
-The Documents tab is shown only when all three checks pass: the signed-in role is `admin` or `permission`, the local bridge responds, and the Windows account running the bridge can read the configured NAS root. Machines without NAS access do not see the Documents tab.
+The Documents tab is shown to signed-in `admin` and `permission` roles. Document requests succeed only when the local bridge is installed and the Windows account running it can read the configured NAS root. The mapped-drive ACL remains the authority for file access.
 
 The browser login is still a lightweight client-side access layer. The NAS ACL must independently restrict the source folder to the Admin/Permission groups.
 
