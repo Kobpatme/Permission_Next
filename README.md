@@ -22,11 +22,9 @@ Static dashboard for Cloudflare Pages.
 
 ## Basic Login
 
-The app includes a basic in-app login gate backed by the existing Firestore `buildings` collection, using the hidden document `permission_next_auth`. On first load, it seeds this admin account if missing:
+The app keeps the existing in-app login gate backed by the Firestore `buildings` collection, using the hidden document `permission_next_auth`. It does not create a default administrator. An existing administrator must create and manage accounts. The last successful user ID is remembered locally, while the active session is stored only in session storage and expires after 12 hours.
 
-- ID: `admin101@uih.co.th`
-- Password: `admin101`
-- Role: `admin`
+New and changed passwords use PBKDF2-SHA256 with an individual random salt and 210,000 iterations. A successful login upgrades an older legacy SHA-256 password hash automatically. Plain-text passwords are never stored locally.
 
 Roles:
 
@@ -48,7 +46,7 @@ Run locally on a Windows machine that has the team drive mapped as `P:`:
 node dev-server.js
 ```
 
-Then open `http://127.0.0.1:8766`. Opening a building automatically asks the local NAS bridge to locate matching files by Thai/English name and Area. The UI exposes only file information and Download links; it does not expose folder selection, folder paths, or path-copy controls.
+Then open `http://127.0.0.1:8766`. Opening a building automatically asks the local NAS bridge to locate matching files by Thai/English name and Area. The UI exposes only file information, Download links, and inline Preview links for PDFs and images; it does not expose folder selection, folder paths, or path-copy controls.
 
 ### Use NAS documents from the deployed Cloudflare Pages site
 
@@ -70,6 +68,6 @@ Download links use short-lived opaque tokens and never expose the mapped-drive p
 
 The Documents tab is shown to signed-in `admin` and `permission` roles. Document requests succeed only when the local bridge is installed and the Windows account running it can read the configured NAS root. The mapped-drive ACL remains the authority for file access.
 
-The browser login is still a lightweight client-side access layer. The NAS ACL must independently restrict the source folder to the Admin/Permission groups.
+The browser login is still a lightweight client-side access layer because this project intentionally does not use Firebase Authentication. The NAS ACL must independently restrict the source folder to the Admin/Permission groups.
 
 This is a lightweight client-side access layer, not a replacement for server-side security rules.

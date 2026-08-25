@@ -157,7 +157,12 @@
       assertBuildingDocIsNotProtected(id);
       return deleteDoc(doc(buildingsCol, String(id)));
     },
-    onSnapshot: (onNext, onError) => onSnapshot(buildingsCol, onNext, onError),
+    onSnapshot: (onNext, onError) => onSnapshot(
+      buildingsCol,
+      { includeMetadataChanges: true },
+      onNext,
+      onError
+    ),
     getAuthUsers: () => recoverProtectedAuthUsers(),
     onAuthSnapshot: (onNext, onError) => onSnapshot(authDocRef, async () => {
       try {

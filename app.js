@@ -106,6 +106,11 @@ function normalizeBuildingRecord(r) {
 
 let DATA = [];
 let firestoreUnsub = null;
+let firestoreRetryTimer = null;
+let firestoreRetryAttempt = 0;
+let firestoreRenderFrame = null;
+let firestoreInitialized = false;
+const pendingAutoCheckDocIds = new Set();
 let PERMISSION_TYPE_FORMULAS = {};
 let PERMISSION_TYPE_FORMULA_VERSION = null;
 
@@ -224,18 +229,38 @@ function exportBuildingsCsv() {
 
 // ====== BASIC AUTH / ROLES ======
 const AUTH_SESSION_KEY = 'permission_next_session_v1';
+const REMEMBERED_USER_KEY = 'permission_next_remembered_user_v1';
+const BRIDGE_SESSION_KEY = 'permission_next_bridge_access_v1';
 const PASSWORD_SALT = 'permission-next-basic-auth-v1';
-const DEFAULT_ADMIN = {
-  email: 'admin101@uih.co.th',
-  password: 'admin101',
-  role: 'admin',
-  display_name: 'Admin'
-};
+const AUTH_SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const PASSWORD_KDF_ITERATIONS = 210_000;
 const ROLE_LABELS = {
   admin: 'Admin',
   permission: 'Permission',
   sale: 'Sale'
 };
+
+function captureBridgeAccessToken() {
+  try {
+    const url = new URL(window.location.href);
+    const token = url.searchParams.get('bridge');
+    if (token) {
+      sessionStorage.setItem(BRIDGE_SESSION_KEY, token);
+      url.searchParams.delete('bridge');
+      history.replaceState(null, '', url.pathname + url.search + url.hash);
+    }
+  } catch {
+    // The hosted web edition does not require a local bridge token.
+  }
+}
+
+function bridgeRequestHeaders(extra = {}) {
+  let token = '';
+  try { token = sessionStorage.getItem(BRIDGE_SESSION_KEY) || ''; } catch { /* no-op */ }
+  return token ? { ...extra, Authorization: `Bearer ${token}` } : extra;
+}
+
+captureBridgeAccessToken();
 const FEE_LABELS = {
   damageDeposit: 'เงินประกันติดตั้ง (Deposit)',
   contractDeposit: 'ค่ามัดจำสัญญา (Contract Deposit)',
@@ -301,14 +326,73 @@ async function sha256(text) {
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function passwordHash(email, password) {
+async function legacyPasswordHash(password) {
   return sha256(`${password}:${PASSWORD_SALT}`);
+}
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+  return btoa(binary);
+}
+
+function base64ToBytes(value) {
+  const binary = atob(value);
+  return Uint8Array.from(binary, char => char.charCodeAt(0));
+}
+
+async function derivePasswordKey(password, salt, iterations) {
+  const material = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  const bits = await crypto.subtle.deriveBits({
+    name: 'PBKDF2',
+    hash: 'SHA-256',
+    salt,
+    iterations
+  }, material, 256);
+  return new Uint8Array(bits);
+}
+
+async function createPasswordHash(password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const derived = await derivePasswordKey(password, salt, PASSWORD_KDF_ITERATIONS);
+  return `pbkdf2-sha256$${PASSWORD_KDF_ITERATIONS}$${bytesToBase64(salt)}$${bytesToBase64(derived)}`;
+}
+
+async function verifyPassword(password, storedHash) {
+  const value = String(storedHash || '');
+  const parts = value.split('$');
+  if (parts.length === 4 && parts[0] === 'pbkdf2-sha256') {
+    const iterations = Number(parts[1]);
+    if (!Number.isInteger(iterations) || iterations < 100_000 || iterations > 1_000_000) return false;
+    try {
+      const expected = base64ToBytes(parts[3]);
+      const actual = await derivePasswordKey(password, base64ToBytes(parts[2]), iterations);
+      if (expected.length !== actual.length) return false;
+      let mismatch = 0;
+      for (let index = 0; index < expected.length; index += 1) mismatch |= expected[index] ^ actual[index];
+      return mismatch === 0;
+    } catch {
+      return false;
+    }
+  }
+  return value === await legacyPasswordHash(password);
 }
 
 function readSavedSession() {
   try {
     localStorage.removeItem(AUTH_SESSION_KEY);
-    return JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY) || 'null');
+    const saved = JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY) || 'null');
+    if (!saved?.saved_at || Date.now() - Number(saved.saved_at) > AUTH_SESSION_MAX_AGE_MS) {
+      sessionStorage.removeItem(AUTH_SESSION_KEY);
+      return null;
+    }
+    return saved;
   } catch {
     return null;
   }
@@ -327,6 +411,33 @@ function saveSession(user) {
 function clearSession() {
   sessionStorage.removeItem(AUTH_SESSION_KEY);
   localStorage.removeItem(AUTH_SESSION_KEY);
+}
+
+function readRememberedUser() {
+  try {
+    return normalizeEmail(localStorage.getItem(REMEMBERED_USER_KEY));
+  } catch {
+    return '';
+  }
+}
+
+function rememberUser(email) {
+  const cleanEmail = normalizeEmail(email);
+  if (!cleanEmail) return;
+  try {
+    localStorage.setItem(REMEMBERED_USER_KEY, cleanEmail);
+  } catch {
+    // Login must continue even if browser storage is unavailable.
+  }
+}
+
+function showRememberedUser() {
+  const emailInput = document.getElementById('login-email');
+  const rememberedBox = document.getElementById('auth-remembered-user');
+  const rememberedEmail = readRememberedUser();
+  if (emailInput && rememberedEmail) emailInput.value = rememberedEmail;
+  if (rememberedBox) rememberedBox.hidden = !rememberedEmail;
+  return Boolean(rememberedEmail);
 }
 
 function sanitizeUser(user) {
@@ -373,24 +484,16 @@ function setCurrentUser(user) {
   if (currentUser) {
     document.body.classList.remove('auth-locked');
     saveSession(currentUser);
+    initFirestoreData().catch(err => {
+      console.error('Firestore initialization failed:', err);
+      setSyncStatus('เชื่อมต่อข้อมูลไม่สำเร็จ: ' + err.message, true);
+    });
   } else {
     document.body.classList.add('auth-locked');
     clearSession();
+    stopRealtimeSync();
   }
   applyRoleUi();
-}
-
-async function ensureDefaultAdminUser() {
-  const existingAdmin = await window.FSDB.getUser(DEFAULT_ADMIN.email);
-  if (existingAdmin) return;
-  await window.FSDB.setUser(DEFAULT_ADMIN.email, {
-    email: DEFAULT_ADMIN.email,
-    role: DEFAULT_ADMIN.role,
-    display_name: DEFAULT_ADMIN.display_name,
-    password_hash: await passwordHash(DEFAULT_ADMIN.email, DEFAULT_ADMIN.password),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  });
 }
 
 function startUsersSync() {
@@ -424,7 +527,6 @@ async function restoreSession() {
 
 async function initAuth() {
   try {
-    await ensureDefaultAdminUser();
     startUsersSync();
     await restoreSession();
   } catch (err) {
@@ -438,8 +540,15 @@ async function loginWithPassword(email, password) {
   if (!cleanEmail || !password) throw new Error('กรุณากรอก ID และ Password');
   const user = await window.FSDB.getUser(cleanEmail);
   if (!user || user.disabled) throw new Error('ไม่พบบัญชีผู้ใช้ หรือบัญชีถูกปิดใช้งาน');
-  const hash = await passwordHash(cleanEmail, password);
-  if (hash !== user.password_hash) throw new Error('ID หรือ Password ไม่ถูกต้อง');
+  if (!await verifyPassword(password, user.password_hash)) throw new Error('ID หรือ Password ไม่ถูกต้อง');
+  if (!String(user.password_hash || '').startsWith('pbkdf2-sha256$')) {
+    await window.FSDB.setUser(cleanEmail, {
+      ...user,
+      password_hash: await createPasswordHash(password),
+      updated_at: new Date().toISOString()
+    });
+  }
+  rememberUser(cleanEmail);
   setCurrentUser(user);
 }
 
@@ -582,7 +691,7 @@ async function saveUserFromForm(form) {
     updated_at: new Date().toISOString()
   };
   if (!existing) payload.created_at = new Date().toISOString();
-  if (password) payload.password_hash = await passwordHash(email, password);
+  if (password) payload.password_hash = await createPasswordHash(password);
   const nextUser = existing ? { ...existing, ...payload, email } : payload;
 
   if (editingEmail && editingEmail !== email) {
@@ -651,9 +760,11 @@ async function migrateRawDataIfEmpty() {
 }
 
 async function persistAutoCheckPermissionStatuses(updates) {
-  const docIds = [...new Set(updates.map(item => item.docId).filter(Boolean).map(String))];
+  const docIds = [...new Set(updates.map(item => item.docId).filter(Boolean).map(String))]
+    .filter(docId => !pendingAutoCheckDocIds.has(docId));
   if (!docIds.length) return;
 
+  docIds.forEach(docId => pendingAutoCheckDocIds.add(docId));
   try {
     const chunkSize = 400;
     for (let i = 0; i < docIds.length; i += chunkSize) {
@@ -667,14 +778,56 @@ async function persistAutoCheckPermissionStatuses(updates) {
   } catch (err) {
     console.error('Auto Check Permission update failed:', err);
     setSyncStatus('อัปเดตสถานะ Check Permission อัตโนมัติไม่สำเร็จ: ' + err.message, true);
+  } finally {
+    docIds.forEach(docId => pendingAutoCheckDocIds.delete(docId));
   }
+}
+
+function scheduleFirestoreRender() {
+  if (firestoreRenderFrame !== null) return;
+  firestoreRenderFrame = requestAnimationFrame(() => {
+    firestoreRenderFrame = null;
+    applyFilters();
+  });
+}
+
+function clearFirestoreRetry() {
+  if (firestoreRetryTimer !== null) clearTimeout(firestoreRetryTimer);
+  firestoreRetryTimer = null;
+}
+
+function stopRealtimeSync() {
+  clearFirestoreRetry();
+  if (firestoreUnsub) firestoreUnsub();
+  firestoreUnsub = null;
+  firestoreRetryAttempt = 0;
+  if (firestoreRenderFrame !== null) cancelAnimationFrame(firestoreRenderFrame);
+  firestoreRenderFrame = null;
+  DATA = [];
+  setPermissionTypeFormulaRegistry(null);
+  render(DATA);
+  setSyncStatus('ออกจากระบบแล้ว');
+}
+
+function scheduleFirestoreRetry() {
+  clearFirestoreRetry();
+  const delayMs = Math.min(30_000, 1_000 * (2 ** firestoreRetryAttempt));
+  firestoreRetryAttempt += 1;
+  setSyncStatus(`การซิงค์ขาดช่วง • กำลังเชื่อมต่อใหม่ใน ${Math.ceil(delayMs / 1000)} วินาที`, true);
+  firestoreRetryTimer = setTimeout(() => {
+    firestoreRetryTimer = null;
+    startRealtimeSync();
+  }, delayMs);
 }
 
 // ------ ซิงค์ข้อมูลแบบ real-time: ทุกครั้งที่มีคนแก้ไข/เพิ่ม/ลบ ทุก client จะเห็นทันที ------
 function startRealtimeSync() {
+  if (!currentUser) return;
+  clearFirestoreRetry();
   if (firestoreUnsub) firestoreUnsub();
   firestoreUnsub = window.FSDB.onSnapshot(
     snapshot => {
+      firestoreRetryAttempt = 0;
       const autoCheckUpdates = [];
       setPermissionTypeFormulaRegistry(null);
       DATA = snapshot.docs
@@ -691,6 +844,12 @@ function startRealtimeSync() {
           return normalizeBuildingRecord(raw);
         })
         .filter(Boolean);
+      const invalidRecordCount = DATA.filter(item =>
+        !String(item.name_th || '').trim() && !String(item.name_eng || '').trim()
+      ).length;
+      DATA = DATA.filter(item =>
+        String(item.name_th || '').trim() || String(item.name_eng || '').trim()
+      );
       const boqProfileCount = DATA.filter(item => item.boq_profile && typeof item.boq_profile === 'object').length;
       const costClassifiedCount = DATA.filter(item =>
         Number(item.boq_profile?.cost_classification_version) >= 1
@@ -700,19 +859,53 @@ function startRealtimeSync() {
         syncStatus.dataset.buildingCount = String(DATA.length);
         syncStatus.dataset.boqProfileCount = String(boqProfileCount);
         syncStatus.dataset.costClassifiedCount = String(costClassifiedCount);
+        syncStatus.dataset.invalidRecordCount = String(invalidRecordCount);
       }
-      setSyncStatus(`ซิงค์ล่าสุด ${new Date().toLocaleTimeString('th-TH')} • BOQ ${boqProfileCount}/${DATA.length} • Cost ${costClassifiedCount}/${DATA.length}`);
-      applyFilters();
+      const syncTime = new Date().toLocaleTimeString('th-TH');
+      if (snapshot.metadata.fromCache) {
+        const cacheLabel = navigator.onLine
+          ? 'กำลังยืนยันข้อมูลกับเซิร์ฟเวอร์'
+          : 'ออฟไลน์ • แสดงข้อมูลล่าสุดจากเครื่อง';
+        setSyncStatus(`${cacheLabel} • ${DATA.length} อาคาร`);
+      } else if (snapshot.metadata.hasPendingWrites) {
+        setSyncStatus(`กำลังส่งการเปลี่ยนแปลง • ${DATA.length} อาคาร`);
+      } else {
+        const qualityLabel = invalidRecordCount ? ` • กักข้อมูลผิดรูป ${invalidRecordCount}` : '';
+        setSyncStatus(`เรียลไทม์ • ซิงค์ล่าสุด ${syncTime} • BOQ ${boqProfileCount}/${DATA.length} • Cost ${costClassifiedCount}/${DATA.length}${qualityLabel}`);
+      }
+      scheduleFirestoreRender();
       persistAutoCheckPermissionStatuses(autoCheckUpdates);
     },
     err => {
       console.error('Firestore sync error:', err);
-      setSyncStatus('เชื่อมต่อ Firestore ไม่สำเร็จ: ' + err.message, true);
+      firestoreUnsub = null;
+      const nonRetryableCodes = new Set(['permission-denied', 'unauthenticated', 'invalid-argument']);
+      if (nonRetryableCodes.has(err?.code)) {
+        setSyncStatus('เชื่อมต่อ Firestore ไม่สำเร็จ: ' + err.message, true);
+        return;
+      }
+      scheduleFirestoreRetry();
     }
   );
 }
 
+window.addEventListener('offline', () => {
+  if (!currentUser) return;
+  setSyncStatus(`ออฟไลน์ • แสดงข้อมูลล่าสุดจากเครื่อง ${DATA.length} อาคาร`);
+});
+
+window.addEventListener('online', () => {
+  if (!currentUser) return;
+  setSyncStatus('กลับมาออนไลน์ • กำลังตรวจสอบข้อมูลล่าสุด...');
+  if (!firestoreUnsub) startRealtimeSync();
+});
+
 async function initFirestoreData() {
+  if (!currentUser || firestoreInitialized) {
+    if (currentUser && !firestoreUnsub) startRealtimeSync();
+    return;
+  }
+  firestoreInitialized = true;
   try {
     setSyncStatus('กำลังเชื่อมต่อ Firestore...');
     await migrateRawDataIfEmpty();
@@ -723,7 +916,6 @@ async function initFirestoreData() {
   startRealtimeSync();
 }
 
-whenFsdbReady(initFirestoreData);
 whenFsdbReady(initAuth);
 
 if (typeof L === 'undefined') {
@@ -741,11 +933,23 @@ if (typeof L === 'undefined') {
 }
 
 // ====== THEME ======
-let isDark = false;
+// Keep the chosen theme stable across reloads. Fall back to the OS preference,
+// while retaining the dark spatial canvas as the default when no preference exists.
+const THEME_STORAGE_KEY = 'permission_next_theme_v1';
+function getInitialDarkTheme() {
+  try {
+    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    if (savedTheme === 'dark' || savedTheme === 'light') return savedTheme === 'dark';
+  } catch (error) {
+    console.warn('Theme preference is unavailable:', error);
+  }
+  return window.matchMedia?.('(prefers-color-scheme: light)').matches ? false : true;
+}
+let isDark = getInitialDarkTheme();
 const themeBtn = document.getElementById('theme-btn');
 let tileLayer;
 // Keep the default map mode explicit: Mod2 uses the standard OpenStreetMap tiles.
-let mapMode = 'osm';
+let mapMode = 'satellite';
 const MAP_ATTRIBUTION = {
   osm: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors',
   esriImagery: 'Tiles &copy; <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>',
@@ -804,7 +1008,20 @@ function makeTile() {
   });
 }
 
-themeBtn.addEventListener('click', () => { isDark = !isDark; applyTheme(); });
+applyTheme();
+document.querySelectorAll('#map-mode-toggle button').forEach(button => {
+  button.classList.toggle('active', button.dataset.mode === mapMode);
+});
+
+themeBtn.addEventListener('click', () => {
+  isDark = !isDark;
+  try {
+    localStorage.setItem(THEME_STORAGE_KEY, isDark ? 'dark' : 'light');
+  } catch (error) {
+    console.warn('Theme preference could not be saved:', error);
+  }
+  applyTheme();
+});
 document.getElementById('map-mode-toggle')?.addEventListener('click', e => {
   const btn = e.target.closest('button[data-mode]');
   if (!btn) return;
@@ -990,16 +1207,20 @@ function statusColor(s) {
   if (s === 'อาคารปิดถาวร') return '#ef4444';
   return '#f59e0b';
 }
-function makeIcon(color, isSelected) {
-  const width = isSelected ? 42 : 34;
-  const height = isSelected ? 52 : 42;
+function makeIcon(color, isSelected, motionDelay = 0) {
+  const width = isSelected ? 38 : 32;
+  const height = isSelected ? 48 : 40;
   return L.divIcon({
     className: '',
-    html: `<div class="pm-marker ${isSelected ? 'selected' : ''}" style="--marker-color:${color}">
-      <svg width="${width}" height="${height}" viewBox="0 0 34 42" aria-hidden="true">
-        <path class="pin-shell" d="M17 1.75c8.2 0 14.85 6.35 14.85 14.18 0 9.75-11.02 21.22-14.1 24.23a1.08 1.08 0 0 1-1.5 0C13.17 37.15 2.15 25.68 2.15 15.93 2.15 8.1 8.8 1.75 17 1.75Z"/>
-        <circle class="pin-core" cx="17" cy="16" r="8.2"/>
-        <circle class="pin-glint" cx="14.4" cy="13.25" r="2.05"/>
+    html: `<div class="pm-marker ${isSelected ? 'selected' : ''}" style="--marker-color:${color};--motion-delay:${motionDelay}s">
+      <svg width="${width}" height="${height}" viewBox="0 0 32 40" aria-hidden="true">
+        <path class="pin-body" d="M16 1.5C8.35 1.5 2.5 7.18 2.5 14.45c0 9.1 10.11 19.96 12.68 22.58a1.13 1.13 0 0 0 1.64 0C19.39 34.41 29.5 23.55 29.5 14.45 29.5 7.18 23.65 1.5 16 1.5Z"/>
+        <path class="pin-facet" d="M16 3.3c6.34 0 11.2 4.67 11.2 10.65 0 6.2-5.73 14.14-11.2 20.37V3.3Z"/>
+        <circle class="pin-orbit" cx="16" cy="14.6" r="9"/>
+        <circle class="pin-icon-bg" cx="16" cy="14.6" r="6.45"/>
+        <path class="pin-building" d="M12.9 18v-6.8h6.2V18m-4.3 0v-2h2.4v2M14.1 13.1h.01m3.8 0h.01"/>
+        <circle class="pin-signal" cx="25.4" cy="6.9" r="2.15"/>
+        <circle class="pin-signal-core" cx="25.4" cy="6.9" r=".85"/>
       </svg>
     </div>`,
     iconSize: [width, height], iconAnchor: [width / 2, height - 2], popupAnchor: [0, -height + 8]
@@ -1125,6 +1346,7 @@ function svgIcon(name, cls = 'svg-icon') {
     file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/>',
     download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
     image: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="10" r="1.5"/><path d="m21 15-5-5L5 19"/>',
+    preview: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="3"/>',
     calc: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 11h.01"/><path d="M12 11h.01"/><path d="M16 11h.01"/><path d="M8 15h.01"/><path d="M12 15h.01"/><path d="M16 15h.01"/>',
     reset: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v6h6"/>',
     clip: '<path d="M9 3h6l2 2v3H7V5l2-2Z"/><path d="M7 8h10v13H7z"/><path d="M9 13h6"/><path d="M9 17h6"/>',
@@ -1256,7 +1478,10 @@ function buildingDocumentRowsHtml(files) {
         <strong title="${attrEsc(file.name)}">${esc(file.name)}</strong>
         <span>${esc(formatDocumentSize(file.size))} • ${esc(formatDocumentTimestamp(file.modified_at))}</span>
       </div>
-      ${file.download_url ? `<a class="building-doc-download" href="${attrEsc(file.download_url)}" download="${attrEsc(file.name)}" title="ดาวน์โหลด ${attrEsc(file.name)}">${svgIcon('download')}<span>Download</span></a>` : ''}
+      ${file.download_url ? `<div class="building-doc-actions">
+        ${['pdf', 'image'].includes(file.category) ? `<a class="building-doc-preview" href="${attrEsc(file.download_url)}&amp;preview=1" target="_blank" rel="noopener" title="พรีวิว ${attrEsc(file.name)}">${svgIcon('preview')}<span>Preview</span></a>` : ''}
+        <a class="building-doc-download" href="${attrEsc(file.download_url)}" download="${attrEsc(file.name)}" title="ดาวน์โหลด ${attrEsc(file.name)}">${svgIcon('download')}<span>Download</span></a>
+      </div>` : ''}
     </div>
   `).join('');
 }
@@ -1367,6 +1592,12 @@ async function loadBuildingDocuments(record) {
     if (String(selectedId) === String(record.id)) {
       renderBuildingDocuments(record, {
         data: buildingDocumentsCache.get(key),
+        folderUnavailable: [
+          'BUILDING_FOLDER_NOT_FOUND',
+          'AMBIGUOUS_BUILDING_FOLDER',
+          'NAS_ROOT_UNAVAILABLE',
+          'NAS_DIRECTORY_UNAVAILABLE'
+        ].includes(err.code),
         error: 'ค้นหารายการเอกสารอัตโนมัติไม่สำเร็จ: ' + err.message
       });
     }
@@ -1386,7 +1617,8 @@ async function discoverBuildingDocumentsFromNas(record) {
     response = await fetch(bridgeBase + '/api/nas/building-documents?' + query.toString(), {
       cache: 'no-store',
       mode: 'cors',
-      targetAddressSpace: 'loopback'
+      targetAddressSpace: 'loopback',
+      headers: bridgeRequestHeaders()
     });
   } catch {
     return null;
@@ -1506,22 +1738,24 @@ function formatPhoneTelLink(p) {
   return { display: formatPhone(p), tel: digits };
 }
 
-function openDrawer(r) {
+function selectBuilding(r) {
   selectedId = r.id;
-  const buildingMapHref = mapHref(r);
-  const buildingCoordText = coordText(r);
-
-  // Update sidebar selection
   document.querySelectorAll('.list-item').forEach(el => {
     el.classList.toggle('selected', String(el.dataset.id) === String(r.id));
   });
   const sel = document.querySelector('.list-item[data-id="'+r.id+'"]');
   if (sel) sel.scrollIntoView({ block:'nearest', behavior:'smooth' });
 
-  // Update marker sizes
-  allMarkers.forEach(({marker, data:d}) => {
-    marker.setIcon(makeIcon(statusColor(d.status), d.id === r.id));
+  // Rebuild marker icons so only the active building emits the radial beacon.
+  allMarkers.forEach(({marker, data:d}, markerIndex) => {
+    marker.setIcon(makeIcon(statusColor(d.status), d.id === r.id, -((markerIndex % 12) * 0.17)));
   });
+}
+
+function openDrawer(r) {
+  selectBuilding(r);
+  const buildingMapHref = mapHref(r);
+  const buildingCoordText = coordText(r);
 
   // Header
   document.getElementById('d-title').textContent = r.name_th || '—';
@@ -1690,11 +1924,14 @@ const layerGroup = (L.markerClusterGroup ? L.markerClusterGroup({
   maxClusterRadius: 46,
   spiderfyOnMaxZoom: true,
   iconCreateFunction(cluster) {
+    const count = cluster.getChildCount();
+    const tier = count >= 50 ? 'large' : count >= 10 ? 'medium' : 'small';
+    const size = tier === 'large' ? 50 : tier === 'medium' ? 44 : 38;
     return L.divIcon({
-      html: `<div class="pm-cluster">${cluster.getChildCount()}</div>`,
-      className: 'marker-cluster',
-      iconSize: [42, 42],
-      iconAnchor: [21, 21]
+      html: `<div class="pm-cluster pm-cluster--${tier}">${count}</div>`,
+      className: `marker-cluster marker-cluster--${tier}`,
+      iconSize: [size, size],
+      iconAnchor: [size / 2, size / 2]
     });
   }
 }) : L.layerGroup()).addTo(map);
@@ -1732,7 +1969,7 @@ function renderMarkers(data) {
   layerGroup.clearLayers();
   allMarkers = [];
   const usedCoords = {};
-  data.filter(r => isStatusLayerVisible(r.status)).forEach(r => {
+  data.filter(r => isStatusLayerVisible(r.status)).forEach((r, markerIndex) => {
     const lat = parseFloat(r.lat);
     const lng = parseFloat(r.lng);
     if (!lat || !lng || lat < 5 || lat > 25) return;
@@ -1754,8 +1991,8 @@ function renderMarkers(data) {
     }
 
     const marker = L.marker([mapLat, mapLng], {
-      icon: makeIcon(statusColor(r.status), r.id === selectedId)
-    }).bindPopup(buildMarkerPopup(r), { closeButton: true, minWidth: 230, maxWidth: 280 });
+      icon: makeIcon(statusColor(r.status), r.id === selectedId, -((markerIndex % 12) * 0.17))
+    }).bindPopup(buildMarkerPopup(r), { closeButton: true, minWidth: 230, maxWidth: 280, autoPan: false });
 
     // Hover tooltip (mouseover/mouseout)
     marker.on('mouseover', function(e) {
@@ -1770,9 +2007,15 @@ function renderMarkers(data) {
     });
     marker.on('mouseout', hideTooltip);
 
-    // Click → open drawer
+    // Click → smoothly focus the building before revealing its popup.
     marker.on('click', function() {
       hideTooltip();
+      selectBuilding(r);
+      map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 16), {
+        animate: true,
+        duration: 0.72,
+        easeLinearity: 0.24
+      });
       marker.openPopup();
     });
 
@@ -1817,7 +2060,7 @@ function render(data) {
       </div>`;
     el.addEventListener('click', () => {
       openDrawer(r);
-      if (r.lat && r.lng) map.setView([r.lat, r.lng], 15, {animate: true});
+      if (r.lat && r.lng) map.flyTo([r.lat, r.lng], Math.max(map.getZoom(), 15), {animate:true, duration:.72, easeLinearity:.24});
     });
     listFrag.appendChild(el);
   });
@@ -1952,7 +2195,7 @@ searchInput.addEventListener('input', () => {
         searchInput.blur();
         applyFilters();
         openDrawer(r);
-        if (r.lat && r.lng) map.setView([r.lat, r.lng], 16, {animate:true});
+        if (r.lat && r.lng) map.flyTo([r.lat, r.lng], Math.max(map.getZoom(), 16), {animate:true, duration:.72, easeLinearity:.24});
       }
     });
   });
@@ -4496,6 +4739,17 @@ document.addEventListener('DOMContentLoaded', function() {
   const otherFeeAddBtn = document.getElementById('other-fee-add-btn');
   document.addEventListener('keydown', trapDialogTabKey);
   applyFieldAriaLabels();
+  const hasRememberedUser = showRememberedUser();
+  if (hasRememberedUser) document.getElementById('login-password')?.focus();
+
+  document.getElementById('change-login-user')?.addEventListener('click', function() {
+    const emailInput = document.getElementById('login-email');
+    const passwordInput = document.getElementById('login-password');
+    if (emailInput) emailInput.value = '';
+    if (passwordInput) passwordInput.value = '';
+    document.getElementById('auth-remembered-user')?.setAttribute('hidden', '');
+    emailInput?.focus();
+  });
 
   (function initMobileTopbarActions(){
     const toggle = document.getElementById('mobile-actions-toggle');
@@ -4650,7 +4904,8 @@ document.addEventListener('DOMContentLoaded', function() {
   if (logoutBtn) {
     logoutBtn.addEventListener('click', function() {
       setCurrentUser(null);
-      document.getElementById('login-email')?.focus();
+      showRememberedUser();
+      document.getElementById('login-password')?.focus();
     });
   }
 

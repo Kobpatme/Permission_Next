@@ -4,10 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Permission Next — Map Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
@@ -24,23 +20,35 @@
       <div class="auth-brand">
         <div class="auth-brand-top">
           <div class="auth-logo-row">
-            <img src="https://img2.pic.in.th/NewLogo.png" alt="Logo">
+            <img src="assets/uih-logo.png" alt="UIH Logo">
             <div>
               <h2>Permission Next</h2>
-              <p class="auth-subtitle">Building Permission</p>
+              <p class="auth-subtitle">Building Intelligence</p>
             </div>
+          </div>
+          <div class="auth-brand-statement">
+            <span>BUILDING DATA PLATFORM</span>
+            <h1>ทุกอาคาร<br>อยู่ในภาพเดียว</h1>
+            <p>ค้นหา ทำความเข้าใจ และบริหารข้อมูลอาคารบนแผนที่เดียว</p>
+            <div class="auth-brand-metrics"><span>LIVE MAP</span><span>DOCUMENTS</span><span>COST DATA</span></div>
           </div>
         </div>
       </div>
       <div class="auth-form-side">
         <div class="auth-form-head">
+          <span class="auth-form-kicker">BUILDING INTELLIGENCE</span>
           <h3>เข้าสู่ระบบ</h3>
+          <p>ใช้บัญชี Permission Next ของคุณเพื่อเริ่มงาน</p>
         </div>
         <div class="auth-field">
           <label for="login-email">Email</label>
           <div class="auth-input-wrap">
             <svg class="auth-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
             <input id="login-email" type="email" autocomplete="username" required placeholder="name@company.com">
+          </div>
+          <div class="auth-remembered-user" id="auth-remembered-user" hidden>
+            <span>จำผู้ใช้ล่าสุดไว้แล้ว</span>
+            <button id="change-login-user" type="button">เปลี่ยนผู้ใช้</button>
           </div>
         </div>
         <div class="auth-field">
@@ -64,8 +72,18 @@
 <!-- TOP BAR -->
 <div id="topbar">
   <div class="logo">
-    <img src="https://img2.pic.in.th/NewLogo.png" class="logo-icon" alt="Logo" style="height: 40px; width: auto;">
-    <h1>Permission <span>Next</span></h1>
+    <img src="assets/uih-logo.png" class="logo-icon" alt="UIH Logo" style="height: 40px; width: auto;">
+    <div class="product-lockup"><span>BUILDING INTELLIGENCE</span><h1>Permission <b>Next</b></h1></div>
+  </div>
+
+  <div class="topbar-search" role="search">
+    <div class="search-wrap">
+      <span class="search-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
+      <input id="search-input" type="text" placeholder="ค้นหาอาคาร... ภาษาไทย หรือ English" autocomplete="off" aria-label="ค้นหาอาคาร"/>
+      <button id="search-clear" title="ล้างการค้นหา"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+      <div id="autocomplete"></div>
+    </div>
+    <span id="result-count"></span>
   </div>
 
   <button id="mobile-actions-toggle" class="mobile-actions-toggle" type="button" aria-expanded="false" aria-controls="topbar-actions" title="เมนู">
@@ -88,8 +106,8 @@
 </div>
 
 <!-- FILTER BAR -->
-<div id="filterbar" class="with-search">
-  <button id="filter-toggle" type="button" aria-expanded="true"><svg class="svg-icon chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg><span class="filter-toggle-text">ตัวกรอง</span></button>
+<div id="filterbar" class="filters-collapsed">
+  <button id="filter-toggle" type="button" aria-expanded="false"><svg class="svg-icon chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg><span class="filter-toggle-text">แสดงตัวกรอง</span></button>
   <div class="filter-controls">
     <span class="filter-label">กรอง:</span>
     <select class="flt" id="f-status" aria-label="กรองตามสถานะ">
@@ -133,13 +151,6 @@
     </select>
     <button id="btn-reset">รีเซ็ต</button>
   </div>
-  <div class="search-wrap">
-    <span class="search-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></span>
-    <input id="search-input" type="text" placeholder="ค้นหาอาคาร... ภาษาไทย หรือ English" autocomplete="off" aria-label="ค้นหาอาคาร"/>
-    <button id="search-clear" title="ล้างการค้นหา"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
-    <div id="autocomplete"></div>
-  </div>
-  <span id="result-count"></span>
 </div>
 
 <!-- MAIN -->
@@ -154,12 +165,12 @@
     <span class="total-badge sync-badge map-sync-status" id="sync-status">กำลังเชื่อมต่อ...</span>
     <div class="map-tools-panel" id="map-tools-panel">
       <div class="map-tools-actions">
-        <button class="map-tool-btn active" id="legend-toggle" type="button">Legend</button>
+        <button class="map-tool-btn" id="legend-toggle" type="button">Legend</button>
         <button class="map-tool-btn" id="fit-bounds-btn" type="button">Fit Bounds</button>
         <button class="map-tool-btn" id="measure-distance-btn" type="button" aria-pressed="false" title="คลิกบนแผนที่เพื่อวัดระยะ">วัดระยะ</button>
       </div>
       <div class="measure-status" id="measure-status" role="status" aria-live="polite" hidden></div>
-      <div class="legend-panel" id="legend-panel">
+      <div class="legend-panel collapsed" id="legend-panel">
         <div class="legend-panel-inner">
           <div class="legend-row">
             <span class="legend-name"><span class="legend-pin" style="--legend-color:#22c55e"></span>อนุมัติแล้ว</span>
@@ -239,7 +250,7 @@
   <!-- SIDEBAR -->
   <div id="sidebar">
     <div id="sidebar-header">
-      <h2>รายการอาคาร</h2>
+      <div><span class="sidebar-kicker">BUILDING INDEX</span><h2>รายการอาคาร</h2></div>
       <span id="sb-count"></span>
     </div>
     <div id="sidebar-list"></div>
@@ -409,7 +420,7 @@
       <div id="quotation-preview">
         <div class="quotation-preview-watermark" aria-hidden="true">PRELIMINARY</div>
         <div class="quotation-preview-header">
-          <img class="quotation-preview-logo" src="https://img2.pic.in.th/NewLogo.png" alt="Logo" width="56" height="56">
+          <img class="quotation-preview-logo" src="assets/uih-logo.png" alt="UIH Logo" width="56" height="56">
           <div class="quotation-preview-title">ใบประเมินราคาเบื้องต้น</div>
           <div class="quotation-preview-subtitle">PRELIMINARY COST ESTIMATE</div>
           <div class="quotation-preview-ref" id="prev-quote-ref">-</div>

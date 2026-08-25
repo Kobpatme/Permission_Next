@@ -7,3 +7,10 @@ Test.html
 Thumbs.db
 *.tmp
 *.bak
+
+# Generated dependencies, builds, and local reports.
+node_modules/
+dist/
+.electron-builder-cache/
+.npm-cache/
+reports/
