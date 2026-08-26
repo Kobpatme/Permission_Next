@@ -11,6 +11,10 @@ Thumbs.db
 # Generated dependencies, builds, and local reports.
 node_modules/
 dist/
+dist-*/
+dist-installer/
 .electron-builder-cache/
+.electron-cache/
 .npm-cache/
+.vendor-tmp/
 reports/

@@ -1,9 +1,9 @@
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { initializeApp } from "./assets/vendor/firebase/firebase-app.js";
   import {
     initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
     collection, doc, setDoc, deleteDoc, onSnapshot, runTransaction,
     writeBatch, getDocs, query, limit
-  } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  } from "./assets/vendor/firebase/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAHC-sAuMmtqz0LntL4HpMTrvONhCbRzbM",

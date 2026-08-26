@@ -41,7 +41,7 @@
   overlay.addEventListener('click', closeModal);
 
   // --- SIDEBAR toggle ---
-  sideBtn.addEventListener('click', (e)=>{
+  sideBtn?.addEventListener('click', (e)=>{
     e.stopPropagation();
     const isOpen = sidebar.classList.toggle('show');
     sideBtn.classList.toggle('active', isOpen);
@@ -51,9 +51,9 @@
   document.addEventListener('click', (e)=>{
     if(sidebar.classList.contains('show') &&
        !sidebar.contains(e.target) &&
-       e.target !== sideBtn){
+       (!sideBtn || e.target !== sideBtn)){
       sidebar.classList.remove('show');
-      sideBtn.classList.remove('active');
+      sideBtn?.classList.remove('active');
     }
   });
 })();

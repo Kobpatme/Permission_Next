@@ -135,6 +135,9 @@ function setSyncStatus(text, isError = false) {
   const el = document.getElementById('sync-status');
   if (el) {
     el.textContent = text;
+    el.title = text;
+    el.hidden = !text;
+    el.classList.toggle('is-error', isError);
     el.style.color = isError ? 'var(--red)' : 'var(--text2)';
   }
   if (isError) console.warn('[Firestore]', text);
@@ -297,7 +300,11 @@ function hasBuildingDocumentRole() {
 }
 
 function canViewBuildingDocuments() {
-  return hasBuildingDocumentRole();
+  return hasBuildingDocumentRole() || currentUser?.can_upload_documents === true;
+}
+
+function canUploadBuildingDocuments() {
+  return currentUser?.role === 'admin' || currentUser?.can_upload_documents === true;
 }
 
 function setBoxMessage(id, message, isError = true) {
@@ -404,6 +411,7 @@ function saveSession(user) {
     email: user.email,
     role: user.role,
     display_name: user.display_name || '',
+    can_upload_documents: user.can_upload_documents === true,
     saved_at: Date.now()
   }));
 }
@@ -446,6 +454,7 @@ function sanitizeUser(user) {
     email: normalizeEmail(user.email || user.id),
     role: user.role || 'sale',
     display_name: user.display_name || '',
+    can_upload_documents: user.role === 'admin' || user.can_upload_documents === true,
     disabled: Boolean(user.disabled),
     created_at: user.created_at || null,
     updated_at: user.updated_at || null
@@ -459,8 +468,11 @@ function applyRoleUi() {
 
   const pill = document.getElementById('current-user-pill');
   if (pill) {
-    pill.querySelector('strong').textContent = currentUser?.display_name || currentUser?.email || '-';
-    pill.querySelector('span').textContent = roleLabel(currentUser?.role);
+    const displayName = currentUser?.display_name || currentUser?.email || '-';
+    pill.querySelector('.user-copy strong').textContent = displayName;
+    pill.querySelector('.user-copy span').textContent = roleLabel(currentUser?.role);
+    const avatar = pill.querySelector('.user-avatar');
+    if (avatar) avatar.textContent = displayName.trim().charAt(0).toUpperCase() || 'U';
   }
 
   document.getElementById('add-building-btn')?.classList.toggle('role-hidden', !canManageBuildings());
@@ -509,7 +521,11 @@ function startUsersSync() {
         if (!latest) {
           setCurrentUser(null);
           setBoxMessage('login-message', 'บัญชีนี้ถูกปิดใช้งานหรือถูกลบแล้ว กรุณาเข้าสู่ระบบใหม่');
-        } else if (latest.role !== currentUser.role || latest.display_name !== currentUser.display_name) {
+        } else if (
+          latest.role !== currentUser.role
+          || latest.display_name !== currentUser.display_name
+          || latest.can_upload_documents !== currentUser.can_upload_documents
+        ) {
           setCurrentUser(latest);
         }
       }
@@ -538,7 +554,23 @@ async function initAuth() {
 async function loginWithPassword(email, password) {
   const cleanEmail = normalizeEmail(email);
   if (!cleanEmail || !password) throw new Error('กรุณากรอก ID และ Password');
-  const user = await window.FSDB.getUser(cleanEmail);
+  if (!window.FSDB) {
+    throw new Error('ระบบข้อมูลผู้ใช้ยังไม่พร้อม กรุณาตรวจสอบเครือข่ายแล้วลองใหม่');
+  }
+  let user;
+  try {
+    user = await window.FSDB.getUser(cleanEmail);
+  } catch (error) {
+    const code = String(error?.code || '');
+    const message = String(error?.message || '');
+    if (!navigator.onLine || /unavailable|network|offline|failed to fetch/i.test(`${code} ${message}`)) {
+      throw new Error('เชื่อมต่อฐานข้อมูลไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตหรือเครือข่ายบริษัท');
+    }
+    if (/permission-denied|unauthenticated/i.test(`${code} ${message}`)) {
+      throw new Error('ระบบไม่มีสิทธิ์อ่านข้อมูลผู้ใช้ กรุณาติดต่อผู้ดูแลระบบ');
+    }
+    throw error;
+  }
   if (!user || user.disabled) throw new Error('ไม่พบบัญชีผู้ใช้ หรือบัญชีถูกปิดใช้งาน');
   if (!await verifyPassword(password, user.password_hash)) throw new Error('ID หรือ Password ไม่ถูกต้อง');
   if (!String(user.password_hash || '').startsWith('pbkdf2-sha256$')) {
@@ -570,6 +602,7 @@ function editUser(email) {
   form.elements['email'].value = user.email;
   form.elements['role'].value = user.role;
   form.elements['display_name'].value = user.display_name || '';
+  form.elements['can_upload_documents'].checked = user.can_upload_documents === true;
   form.elements['password'].value = '';
   form.elements['password'].required = false;
   setBoxMessage('user-admin-message', 'กำลังแก้ไขผู้ใช้: ' + user.email, false);
@@ -678,6 +711,7 @@ async function saveUserFromForm(form) {
   const password = String(formData.get('password') || '');
   const role = String(formData.get('role') || 'sale');
   const displayName = String(formData.get('display_name') || '').trim();
+  const canUploadDocuments = role === 'admin' || formData.get('can_upload_documents') === 'on';
 
   if (!email) throw new Error('กรุณากรอก ID / Email');
   if (!['admin', 'permission', 'sale'].includes(role)) throw new Error('Role ไม่ถูกต้อง');
@@ -688,6 +722,7 @@ async function saveUserFromForm(form) {
     email,
     role,
     display_name: displayName,
+    can_upload_documents: canUploadDocuments,
     updated_at: new Date().toISOString()
   };
   if (!existing) payload.created_at = new Date().toISOString();
@@ -714,6 +749,7 @@ function renderUserAdminList() {
       <td>${esc(user.email)}</td>
       <td><span class="user-role-badge">${esc(roleLabel(user.role))}</span></td>
       <td>${esc(user.display_name || '-')}</td>
+      <td><span class="user-permission-badge ${user.can_upload_documents ? 'allowed' : 'denied'}">${user.can_upload_documents ? 'อนุญาต' : 'ไม่อนุญาต'}</span></td>
       <td>
         <div class="user-row-actions">
           <button class="user-admin-btn" type="button" data-user-edit="${attrEsc(user.email)}">แก้ไข</button>
@@ -721,7 +757,7 @@ function renderUserAdminList() {
         </div>
       </td>
     </tr>
-  `).join('') || '<tr><td colspan="4" style="color:var(--muted);text-align:center;">ยังไม่มีผู้ใช้</td></tr>';
+  `).join('') || '<tr><td colspan="5" style="color:var(--muted);text-align:center;">ยังไม่มีผู้ใช้</td></tr>';
 }
 
 // ------ นำเข้าข้อมูลเดิม (RAW_DATA) เข้า Firestore ครั้งแรกเท่านั้น ------
@@ -871,7 +907,10 @@ function startRealtimeSync() {
         setSyncStatus(`กำลังส่งการเปลี่ยนแปลง • ${DATA.length} อาคาร`);
       } else {
         const qualityLabel = invalidRecordCount ? ` • กักข้อมูลผิดรูป ${invalidRecordCount}` : '';
-        setSyncStatus(`เรียลไทม์ • ซิงค์ล่าสุด ${syncTime} • BOQ ${boqProfileCount}/${DATA.length} • Cost ${costClassifiedCount}/${DATA.length}${qualityLabel}`);
+        const syncDetail = `ซิงค์ล่าสุด ${syncTime} • BOQ ${boqProfileCount}/${DATA.length} • Cost ${costClassifiedCount}/${DATA.length}${qualityLabel}`;
+        setSyncStatus('');
+        const syncStatus = document.getElementById('sync-status');
+        if (syncStatus) syncStatus.title = syncDetail;
       }
       scheduleFirestoreRender();
       persistAutoCheckPermissionStatuses(autoCheckUpdates);
@@ -971,7 +1010,7 @@ function applyTheme() {
   const ico = document.getElementById('theme-ico');
   const lbl = document.getElementById('theme-label');
   if(ico && lbl){
-    lbl.textContent = isDark ? 'Dark' : 'Light';
+    lbl.textContent = isDark ? 'โหมดมืด' : 'โหมดสว่าง';
     ico.innerHTML = isDark
       ? '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'
       : '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
@@ -1032,7 +1071,7 @@ document.getElementById('map-mode-toggle')?.addEventListener('click', e => {
 });
 
 // ====== MAP ======
-const map = L.map('map', { center: [13.75, 100.52], zoom: 11, zoomControl: true });
+const map = L.map('map', { center: [13.15, 101.0], zoom: 6, zoomControl: true });
 tileLayer = makeTile().addTo(map);
 
 // ====== DISTANCE MEASUREMENT ======
@@ -1345,6 +1384,7 @@ function svgIcon(name, cls = 'svg-icon') {
     ruler: '<path d="M4 17 17 4l3 3L7 20l-3-3Z"/><path d="m14 7 3 3"/><path d="m11 10 2 2"/><path d="m8 13 3 3"/>',
     file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/>',
     download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
+    upload: '<path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 21h14"/>',
     image: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="10" r="1.5"/><path d="m21 15-5-5L5 19"/>',
     preview: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6Z"/><circle cx="12" cy="12" r="3"/>',
     calc: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 11h.01"/><path d="M12 11h.01"/><path d="M16 11h.01"/><path d="M8 15h.01"/><path d="M12 15h.01"/><path d="M16 15h.01"/>',
@@ -1368,6 +1408,7 @@ const BUILDING_DOCUMENT_CATEGORIES = Object.freeze({
   }
 });
 const MAX_BUILDING_DOCUMENT_FILES = 1500;
+const MAX_BUILDING_DOCUMENT_UPLOAD_BYTES = 100 * 1024 * 1024;
 const DEFAULT_LOCAL_NAS_BRIDGE_URL = 'http://127.0.0.1:8766';
 const NAS_BRIDGE_PERMISSION_TIMEOUT_MS = 30000;
 const buildingDocumentsCache = new Map();
@@ -1379,8 +1420,7 @@ function normalizeNasBridgeBase(value) {
 
 async function findNasBridgeBase() {
   const configuredBase = normalizeNasBridgeBase(window.PERMISSION_NAS_BRIDGE_URL);
-  const currentIsBridge = ['127.0.0.1', 'localhost'].includes(location.hostname)
-    && location.port === '8766';
+  const currentIsBridge = ['127.0.0.1', 'localhost'].includes(location.hostname);
   const candidates = [...new Set([
     configuredBase,
     currentIsBridge ? location.origin : '',
@@ -1464,6 +1504,7 @@ function normalizedBuildingDocumentData(raw, record) {
     .filter(file => file.name && BUILDING_DOCUMENT_CATEGORIES[file.category]);
   return {
     building_id: raw?.building_id || buildingDocumentKey(record),
+    folder_found: raw?.folder_found === true,
     files,
     synced_at: raw?.synced_at || null,
     synced_by: raw?.synced_by || ''
@@ -1488,19 +1529,24 @@ function buildingDocumentRowsHtml(files) {
 
 function renderBuildingDocuments(record, options = {}) {
   const panel = document.getElementById('tab-documents');
+  const countBadge = document.getElementById('drawer-doc-count');
   if (!panel) return;
   if (!canViewBuildingDocuments()) {
     panel.innerHTML = '';
+    if (countBadge) countBadge.textContent = '0';
     return;
   }
 
   const key = buildingDocumentKey(record);
   const data = normalizedBuildingDocumentData(options.data ?? buildingDocumentsCache.get(key), record);
   const files = data.files.map((file, index) => ({ ...file, _index: index }));
+  const folderFound = options.folderUnavailable ? false : data.folder_found === true;
   if (options.loading) {
     panel.innerHTML = '<div class="building-doc-empty">กำลังโหลดรายการเอกสาร...</div>';
+    if (countBadge) countBadge.textContent = '…';
     return;
   }
+  if (countBadge) countBadge.textContent = String(files.length);
 
   const statusMessage = options.error
     ? `<div class="building-doc-status error">
@@ -1513,19 +1559,28 @@ function renderBuildingDocuments(record, options = {}) {
 
   const categorySections = Object.entries(BUILDING_DOCUMENT_CATEGORIES).map(([category, config]) => {
     const categoryFiles = files.filter(file => file.category === category);
+    const uploadInputId = `building-doc-upload-${category}`;
+    const acceptedExtensions = [...config.extensions].map(extension => '.' + extension).join(',');
     return `
       <section class="building-doc-category">
-        <button class="building-doc-category-head" type="button"
-          data-document-category="${attrEsc(category)}"
-          aria-expanded="false"
-          aria-controls="building-doc-list-${attrEsc(category)}"
-          ${categoryFiles.length ? '' : 'disabled'}>
-          <span>${svgIcon(config.icon)}${esc(config.label)}</span>
-          <span class="building-doc-category-meta">
-            <strong>${categoryFiles.length.toLocaleString('th-TH')}</strong>
-            <svg class="building-doc-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
-          </span>
-        </button>
+        <div class="building-doc-category-bar">
+          <button class="building-doc-category-head" type="button"
+            data-document-category="${attrEsc(category)}"
+            aria-expanded="false"
+            aria-controls="building-doc-list-${attrEsc(category)}"
+            ${categoryFiles.length ? '' : 'disabled'}>
+            <span>${svgIcon(config.icon)}${esc(config.label)}</span>
+            <span class="building-doc-category-meta">
+              <strong>${categoryFiles.length.toLocaleString('th-TH')}</strong>
+              <svg class="building-doc-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
+            </span>
+          </button>
+          ${canUploadBuildingDocuments() && folderFound ? `
+            <input id="${uploadInputId}" class="building-doc-category-upload-input" type="file" multiple
+              accept="${attrEsc(acceptedExtensions)}" data-upload-category="${attrEsc(category)}">
+            <label class="building-doc-category-upload-btn" for="${uploadInputId}" title="เพิ่ม${attrEsc(config.label)}">+ เพิ่ม</label>
+          ` : ''}
+        </div>
         <div class="building-doc-list" id="building-doc-list-${attrEsc(category)}" hidden></div>
       </section>
     `;
@@ -1533,19 +1588,19 @@ function renderBuildingDocuments(record, options = {}) {
 
   panel.innerHTML = `
     <div class="building-doc-toolbar">
-      <div>
-        <div class="section-head">เอกสารอาคารจาก NAS</div>
-        <p>ระบบค้นหาเอกสารให้อัตโนมัติ และเปิดให้ดาวน์โหลดเฉพาะไฟล์ที่พบ</p>
-      </div>
+      <div class="section-head">เอกสาร</div>
+      <button id="building-doc-refresh-btn" class="building-doc-refresh-btn" type="button" title="ค้นหาเอกสารใหม่" aria-label="ค้นหาเอกสารใหม่">
+        ${svgIcon('reset')}
+      </button>
     </div>
     ${statusMessage}
-    <div class="building-doc-summary">
-      <span>รวม <strong>${files.length.toLocaleString('th-TH')}</strong> ไฟล์</span>
-      <span>ตรวจล่าสุด <strong>${esc(formatDocumentTimestamp(data.synced_at))}</strong></span>
-      ${data.synced_by ? `<span>โดย <strong>${esc(data.synced_by)}</strong></span>` : ''}
-    </div>
     ${categorySections}
   `;
+
+  panel.querySelectorAll('.building-doc-category-upload-input').forEach(uploadInput => {
+    uploadInput.addEventListener('change', () => uploadBuildingDocuments(record, uploadInput));
+  });
+  panel.querySelector('#building-doc-refresh-btn')?.addEventListener('click', () => loadBuildingDocuments(record));
 }
 
 document.getElementById('tab-documents').addEventListener('click', event => {
@@ -1625,8 +1680,13 @@ async function discoverBuildingDocumentsFromNas(record) {
   }
   if (response.headers.get('X-Permission-NAS-Bridge') !== '1') return null;
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error || 'ค้นหาโฟลเดอร์อาคารใน NAS ไม่สำเร็จ');
+  if (!response.ok) {
+    const error = new Error(result.error || 'ค้นหาโฟลเดอร์อาคารใน NAS ไม่สำเร็จ');
+    error.code = result.code || 'NAS_SEARCH_FAILED';
+    throw error;
+  }
   return {
+    folder_found: result.folder_found === true,
     files: (Array.isArray(result.files) ? result.files : []).map(file => ({
       ...file,
       download_url: file.download_url ? new URL(file.download_url, bridgeBase + '/').href : ''
@@ -1634,7 +1694,103 @@ async function discoverBuildingDocumentsFromNas(record) {
   };
 }
 
-async function syncBuildingDocuments(record) {
+async function uploadBuildingDocumentToNas(record, file) {
+  const bridgeBase = await getNasBridgeBase();
+  if (!bridgeBase) throw new Error('ยังเชื่อมต่อ NAS Bridge ไม่ได้');
+  const query = new URLSearchParams({
+    nameTh: record?.name_th || '',
+    nameEng: record?.name_eng || '',
+    area: record?.area || '',
+    fileName: file.name
+  });
+  const response = await fetch(bridgeBase + '/api/nas/building-documents/upload?' + query.toString(), {
+    method: 'POST',
+    cache: 'no-store',
+    headers: bridgeRequestHeaders({
+      'Content-Type': file.type || 'application/octet-stream',
+      'X-Permission-Document-Upload': '1',
+      'X-Permission-Upload-User': currentUser?.email || ''
+    }),
+    body: file
+  });
+  if (response.headers.get('X-Permission-NAS-Bridge') !== '1') {
+    throw new Error('กรุณาเปิดระบบผ่าน local dev server เพื่อเพิ่มเอกสารลง NAS');
+  }
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'เพิ่มเอกสารไม่สำเร็จ');
+  return result.file;
+}
+
+async function uploadBuildingDocuments(record, inputOrFiles) {
+  if (!canUploadBuildingDocuments()) {
+    if (inputOrFiles && 'value' in inputOrFiles) inputOrFiles.value = '';
+    return;
+  }
+  const files = Array.isArray(inputOrFiles)
+    ? inputOrFiles
+    : [...(inputOrFiles?.files || [])];
+  const uploadButton = !Array.isArray(inputOrFiles) && inputOrFiles?.id
+    ? document.querySelector(`label[for="${CSS.escape(inputOrFiles.id)}"]`)
+    : null;
+  if (inputOrFiles && 'value' in inputOrFiles) inputOrFiles.value = '';
+  if (!files.length) return;
+
+  const validFiles = files.filter(file => {
+    const extension = String(file.name || '').split('.').pop()?.toLowerCase();
+    return Object.values(BUILDING_DOCUMENT_CATEGORIES)
+      .some(category => category.extensions.has(extension));
+  });
+  if (validFiles.length !== files.length) {
+    renderBuildingDocuments(record, {
+      data: buildingDocumentsCache.get(buildingDocumentKey(record)),
+      error: 'มีไฟล์บางรายการไม่ใช่ DWG, PDF หรือรูปภาพที่ระบบรองรับ'
+    });
+  }
+  if (!validFiles.length) return;
+
+  const oversized = validFiles.filter(file => file.size > MAX_BUILDING_DOCUMENT_UPLOAD_BYTES);
+  if (oversized.length) {
+    renderBuildingDocuments(record, {
+      data: buildingDocumentsCache.get(buildingDocumentKey(record)),
+      error: `ไฟล์ต้องมีขนาดไม่เกิน ${(MAX_BUILDING_DOCUMENT_UPLOAD_BYTES / 1024 / 1024).toLocaleString('th-TH')} MB ต่อไฟล์`
+    });
+    return;
+  }
+
+  const key = buildingDocumentKey(record);
+  if (uploadButton) {
+    uploadButton.classList.add('loading');
+    uploadButton.textContent = '...';
+  }
+
+  let uploadedCount = 0;
+  const errors = [];
+  for (const file of validFiles) {
+    try {
+      await uploadBuildingDocumentToNas(record, file);
+      uploadedCount += 1;
+    } catch (err) {
+      errors.push(`${file.name}: ${err.message}`);
+    }
+  }
+
+  try {
+    await syncBuildingDocuments(record);
+    if (errors.length) {
+      renderBuildingDocuments(record, {
+        data: buildingDocumentsCache.get(key),
+        error: `เพิ่มสำเร็จ ${uploadedCount.toLocaleString('th-TH')} ไฟล์ แต่ไม่สำเร็จ ${errors.length.toLocaleString('th-TH')} ไฟล์ — ${errors.join(' | ')}`
+      });
+    }
+  } catch (err) {
+    renderBuildingDocuments(record, {
+      data: buildingDocumentsCache.get(key),
+      error: `เพิ่มไฟล์แล้ว แต่โหลดรายการล่าสุดไม่สำเร็จ: ${err.message}`
+    });
+  }
+}
+
+async function syncBuildingDocuments(record, options = {}) {
   if (!canViewBuildingDocuments()) throw new Error('บัญชีนี้ไม่มีสิทธิ์ดูหรือค้นหาเอกสาร');
   const key = buildingDocumentKey(record);
   if (!key) throw new Error('ไม่พบรหัสอาคารสำหรับค้นหาเอกสาร');
@@ -1660,14 +1816,12 @@ async function syncBuildingDocuments(record) {
   if (selected.files.length > MAX_BUILDING_DOCUMENT_FILES) {
     throw new Error(`จำนวนไฟล์เกิน ${MAX_BUILDING_DOCUMENT_FILES.toLocaleString('th-TH')} รายการ กรุณาแยกโฟลเดอร์อาคารให้เล็กลง`);
   }
-  if (!selected.files.length) {
-    throw new Error('ไม่พบไฟล์ DWG, PDF หรือรูปภาพในโฟลเดอร์ที่เลือก');
-  }
   const files = selected.files
     .map(file => ({ ...file }))
     .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name, 'th'));
   const payload = {
     building_id: record.id,
+    folder_found: selected.folder_found === true,
     files,
     synced_at: new Date().toISOString()
   };
@@ -1675,7 +1829,9 @@ async function syncBuildingDocuments(record) {
   if (String(selectedId) === String(record.id)) {
     renderBuildingDocuments(record, {
       data: payload,
-      message: `ค้นหาเอกสารจาก NAS สำเร็จ ${files.length.toLocaleString('th-TH')} ไฟล์`
+      message: options.message || (files.length
+        ? `ค้นหาเอกสารจาก NAS สำเร็จ ${files.length.toLocaleString('th-TH')} ไฟล์`
+        : 'พบโฟลเดอร์อาคารแล้ว แต่ยังไม่มีไฟล์ที่ระบบรองรับ')
     });
   }
 }
@@ -1738,6 +1894,17 @@ function formatPhoneTelLink(p) {
   return { display: formatPhone(p), tel: digits };
 }
 
+function getBuildingFreshness(value) {
+  if (!value) return { label: 'ไม่ทราบวันที่', tone: 'unknown', stale: true };
+  const date = parseBuildingUpdateDate(value);
+  if (!date) return { label: formatBuildingUpdateDate(value), tone: 'unknown', stale: true };
+  const days = Math.max(0, Math.floor((Date.now() - date.getTime()) / 86400000));
+  if (days === 0) return { label: 'วันนี้', tone: 'fresh', stale: false };
+  if (days === 1) return { label: 'เมื่อวาน', tone: 'fresh', stale: false };
+  if (days > CHECK_PERMISSION_STALE_DAYS) return { label: `${days} วันที่แล้ว`, tone: 'stale', stale: true };
+  return { label: `${days} วันที่แล้ว`, tone: 'fresh', stale: false };
+}
+
 function selectBuilding(r) {
   selectedId = r.id;
   document.querySelectorAll('.list-item').forEach(el => {
@@ -1756,40 +1923,52 @@ function openDrawer(r) {
   selectBuilding(r);
   const buildingMapHref = mapHref(r);
   const buildingCoordText = coordText(r);
+  const freshness = getBuildingFreshness(r.update_date);
 
   // Header
   document.getElementById('d-title').textContent = r.name_th || '—';
   document.getElementById('d-eng').textContent = r.name_eng || '';
   document.getElementById('d-tags').innerHTML = `
-    <span class="tag ${statusTag(r.status)}">${esc(r.status||'—')}</span>
     <span class="tag ${groupTag(r.group)}">${esc(r.group||'—')}</span>
     ${r.survey_type ? `<span class="tag tag-neutral">${esc(r.survey_type)}</span>` : ''}
     ${r.type ? `<span class="tag ${typeTag(r.type)}">${esc(r.type)}</span>` : ''}
     ${r.install_type ? `<span class="tag tag-neutral">${esc(r.install_type)}</span>` : ''}
   `;
+  document.getElementById('drawer-summary-status').textContent = r.status || '—';
+  document.getElementById('drawer-summary-status').dataset.status = String(r.status || '').toLowerCase().replace(/\s+/g, '-');
+  document.getElementById('drawer-summary-area').textContent = r.area || '—';
+  document.getElementById('drawer-summary-province').textContent = r.province || '—';
+  const updatedSummary = document.getElementById('drawer-summary-updated');
+  updatedSummary.textContent = freshness.label;
+  updatedSummary.dataset.tone = freshness.tone;
+
+  const editAction = document.getElementById('drawer-edit-btn');
+  editAction.dataset.buildingId = r.id;
+  editAction.hidden = !canManageBuildings();
+  const mapAction = document.getElementById('drawer-map-btn');
+  mapAction.href = buildingMapHref || '#';
+  mapAction.hidden = !buildingMapHref;
+  const quoteAction = document.getElementById('drawer-quotation-btn');
+  quoteAction.dataset.buildingId = r.id;
+  quoteAction.hidden = !canCalculateQuotation(r.status);
 
   // Tab: General
   document.getElementById('tab-general').innerHTML = `
-    <div class="section-head" style="display:flex;justify-content:space-between;align-items:center;gap:10px;">
-      <span>ข้อมูลอาคาร</span>
-      ${canManageBuildings() ? `<button class="edit-building-btn" type="button" data-building-id="${attrEsc(r.id)}" style="border:1px solid var(--border2);background:var(--surface2);color:var(--text2);border-radius:8px;padding:6px 10px;cursor:pointer;font-size:12px;">แก้ไขข้อมูล</button>` : ''}
-    </div>
+    ${(freshness.stale || !String(r.wm_point || '').trim()) ? `<div class="building-data-alert">
+      <strong>ข้อมูลที่ควรตรวจสอบ</strong>
+      ${freshness.stale ? `<span>• ข้อมูลอัปเดตล่าสุด ${esc(freshness.label)}</span>` : ''}
+      ${!String(r.wm_point || '').trim() ? '<span>• ยังไม่มีข้อมูลจุดเชื่อมต่อ WM</span>' : ''}
+    </div>` : '<div class="building-data-ready">ข้อมูลพร้อมสำหรับการประเมินเบื้องต้น</div>'}
+    <div class="section-head"><span>ข้อมูลการติดตั้ง</span></div>
     <div class="info-grid">
-      <div class="info-cell"><label>Area</label><p>${esc(r.area||'—')}</p></div>
-      <div class="info-cell"><label>จังหวัด</label><p>${esc(r.province||'—')}</p></div>
-      <div class="info-cell"><label>ทำเล / โซน</label><p>${esc(r.location||'—')}</p></div>
-      <div class="info-cell"><label>ระยะ Permission</label><p>${r.duration ? esc(r.duration)+' วัน' : '—'}</p></div>
-      <div class="info-cell"><label>อัปเดตล่าสุด</label><p>${esc(formatBuildingUpdateDate(r.update_date))}</p></div>
-      <div class="info-cell"><label>WM Point</label><p>${esc(r.wm_point||'—')}</p></div>
-      <div class="info-cell"><label>Enclosure</label><p>${esc(r.enclosure||'—')}</p></div>
-      <div class="info-cell"><label>Max H-Wire (ม.)</label><p>${esc(r.max_horizontal||'—')}</p></div>
+      ${r.location ? `<div class="info-cell"><label>ทำเล / โซน</label><p>${esc(r.location)}</p></div>` : ''}
+      ${r.duration ? `<div class="info-cell"><label>ระยะดำเนินการ Permission</label><p>${esc(r.duration)} วัน</p></div>` : ''}
+      ${r.wm_point ? `<div class="info-cell"><label>จุดเชื่อมต่อ (WM)</label><p>${esc(r.wm_point)}</p></div>` : ''}
+      ${r.enclosure ? `<div class="info-cell"><label>ตู้เชื่อมต่อ</label><p>${esc(r.enclosure)}</p></div>` : ''}
+      ${r.max_horizontal ? `<div class="info-cell"><label>ระยะสายแนวนอนสูงสุด</label><p>${esc(r.max_horizontal)} เมตร</p></div>` : ''}
       ${r.address ? `<div class="info-cell full"><label>ที่อยู่</label><p style="font-size:12px;line-height:1.6;color:var(--text2)">${esc(r.address)}${buildingMapHref ? ` <a href="${attrEsc(buildingMapHref)}" target="_blank" rel="noopener" style="font-size:11px;margin-left:6px">ดูแผนที่</a>` : ''}</p></div>` : ''}
       ${buildingMapHref ? `<div class="info-cell"><label>พิกัด</label><p class="coord-row"><a href="${attrEsc(buildingMapHref)}" target="_blank" rel="noopener">${esc(buildingCoordText)}</a><button class="copy-coord-btn" type="button" data-copy-coord="${attrEsc(buildingCoordText)}">${svgIcon('clip')}<span>คัดลอก</span></button></p></div>` : ''}
       ${r.remark ? `<div class="info-cell full"><div class="remark-box">${esc(r.remark)}</div></div>` : ''}
-      ${canCalculateQuotation(r.status) ? `
-      <div class="info-cell full" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--border);">
-        <button class="quotation-open-btn" data-building-id="${attrEsc(r.id)}" style="width: 100%; padding: 12px; background: var(--green); color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .18s; font-family: inherit;">ประเมินราคาเบื้องต้น</button>
-      </div>` : ''}
     </div>
   `;
   applyRoleUi();
@@ -1799,14 +1978,19 @@ function openDrawer(r) {
   const phones = (String(r.phone||'')).split(/[,\/]/).map(s=>s.trim()).filter(Boolean);
   const mobiles = (String(r.mobile||'')).split(/[,\/]/).map(s=>s.trim()).filter(Boolean);
   const emails = (String(r.email||'')).split(/[,;]/).map(s=>s.trim()).filter(Boolean);
+  const phoneActionsHtml = [...phones, ...mobiles].map(phone => {
+    const formatted = formatPhoneTelLink(phone);
+    return `<div class="contact-action-row"><span>${esc(formatted.display)}</span><div>${formatted.tel ? `<a href="tel:${attrEsc(formatted.tel)}">โทร</a>` : ''}<button type="button" data-copy-contact="${attrEsc(formatted.display)}">คัดลอก</button></div></div>`;
+  }).join('');
+  const emailActionsHtml = emails.map(email => `
+    <div class="contact-action-row"><span>${esc(email)}</span><div><a href="mailto:${attrEsc(email)}">ส่งอีเมล</a><button type="button" data-copy-contact="${attrEsc(email)}">คัดลอก</button></div></div>`
+  ).join('');
   document.getElementById('tab-contact').innerHTML = `
     <div class="section-head">ผู้ติดต่อ</div>
     <div class="contact-card">
       <div class="contact-name">${contacts.length ? contacts.map(esc).join(' / ') : '—'}</div>
-      ${phones.length ? `<div class="contact-row"><span class="ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.84 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.77 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.15a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span><span class="val">${phones.map(p=>{const r=formatPhoneTelLink(p); return r.tel ? `<a href="tel:${attrEsc(r.tel)}">${esc(r.display)}</a>` : `<span>${esc(r.display)}</span>`;}).join('<br>')}</span></div>` : ''}
-      ${mobiles.length ? `<div class="contact-row"><span class="ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></span><span class="val">${mobiles.map(m=>{const r=formatPhoneTelLink(m); return r.tel ? `<a href="tel:${attrEsc(r.tel)}">${esc(r.display)}</a>` : `<span>${esc(r.display)}</span>`;}).join('<br>')}</span></div>` : ''}
-      ${emails.length ? `<div class="contact-row"><span class="ico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span><span class="val">${emails.map(e=>`<a href="mailto:${attrEsc(e)}">${esc(e)}</a>`).join('<br>')}</span></div>` : ''}
-      ${!contacts.length && !phones.length && !mobiles.length && !emails.length ? '<p style="color:var(--muted);font-size:13px">ไม่มีข้อมูลผู้ติดต่อ</p>' : ''}
+      ${phoneActionsHtml}${emailActionsHtml}
+      ${!contacts.length && !phoneActionsHtml && !emailActionsHtml ? '<div class="drawer-empty-state"><strong>ยังไม่มีข้อมูลผู้ติดต่อ</strong><span>ผู้ดูแลระบบสามารถเพิ่มข้อมูลได้จากปุ่มแก้ไขข้อมูล</span></div>' : ''}
     </div>
   `;
 
@@ -1819,6 +2003,9 @@ function openDrawer(r) {
       const isRevenueShare = item.calculation_type === 'revenue_share';
       return {
         label: item.label,
+        costType: isRevenueShare
+          ? (item.revenue_period === 'annual' ? 'OPEX_ANNUAL' : 'OPEX_MONTHLY')
+          : (item.cost_type || 'UNCLASSIFIED'),
         amount: isRevenueShare ? null : item.amount,
         valueText: isRevenueShare
           ? `${formatCurrencyNumeric(Number(item.rate) || 0)}%`
@@ -1830,14 +2017,23 @@ function openDrawer(r) {
     });
 
   const totalFee = feeRows.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+  const feeGroupConfig = [
+    { keys: ['CAPEX'], label: 'ค่าใช้จ่ายครั้งแรก' },
+    { keys: ['OPEX', 'OPEX_MONTHLY'], label: 'ค่าใช้จ่ายรายเดือน' },
+    { keys: ['OPEX_ANNUAL'], label: 'ค่าใช้จ่ายรายปี' },
+    { keys: ['DEPOSIT'], label: 'เงินประกัน / เงินมัดจำ' },
+    { keys: ['UNCLASSIFIED'], label: 'รายการอื่นที่ต้องตรวจสอบ' }
+  ];
+  const feeGroupsHtml = feeGroupConfig.map(group => {
+    const items = feeRows.filter(item => group.keys.includes(item.costType));
+    if (!items.length) return '';
+    const groupTotal = items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    return `<section class="drawer-fee-group"><div class="drawer-fee-group-head"><strong>${esc(group.label)}</strong>${groupTotal > 0 ? `<span>${fmt(groupTotal)}</span>` : ''}</div><table class="fee-table">${items.map(item => `<tr><td>${esc(item.label)}${item.detail ? `<br><span>${esc(item.detail)}</span>` : ''}</td><td>${esc(item.valueText)}</td></tr>`).join('')}</table></section>`;
+  }).join('');
 
   document.getElementById('tab-fee').innerHTML = feeRows.length
-    ? `<div class="section-head">ค่าธรรมเนียม</div>
-       <table class="fee-table">
-         ${feeRows.map(item => `<tr><td>${esc(item.label)}${item.detail ? `<br><span style="font-size:11px;color:var(--muted);font-weight:600">${esc(item.detail)}</span>` : ''}</td><td>${esc(item.valueText)}</td></tr>`).join('')}
-         ${totalFee > 0 ? `<tr class="fee-total-row"><td>รวมทั้งหมด</td><td>${fmt(totalFee)}</td></tr>` : ''}
-       </table>`
-    : `<div class="no-fee">ไม่มีข้อมูลค่าธรรมเนียม</div>`;
+    ? `<div class="section-head">ค่าใช้จ่ายของอาคาร</div>${feeGroupsHtml}${totalFee > 0 ? `<div class="drawer-fee-note">ยอดแต่ละประเภทมีรอบการชำระต่างกัน จึงไม่ควรนำมารวมเป็นยอดเดียว</div>` : ''}`
+    : `<div class="drawer-empty-state"><strong>ยังไม่มีข้อมูลค่าใช้จ่าย</strong><span>สามารถประเมินเฉพาะต้นทุนติดตั้งมาตรฐานได้</span></div>`;
 
   if (canViewBuildingDocuments()) loadBuildingDocuments(r);
   else document.getElementById('tab-documents').innerHTML = '';
@@ -1907,6 +2103,30 @@ document.getElementById('tab-general').addEventListener('click', e => {
   }
   const btn = e.target.closest('.quotation-open-btn');
   if (btn) quickCalculateQuotation(btn.dataset.buildingId);
+});
+document.getElementById('tab-contact').addEventListener('click', e => {
+  const copyBtn = e.target.closest('[data-copy-contact]');
+  if (!copyBtn) return;
+  copyText(copyBtn.dataset.copyContact || '').then(() => {
+    const previous = copyBtn.textContent;
+    copyBtn.textContent = 'คัดลอกแล้ว';
+    copyBtn.classList.add('copied');
+    setTimeout(() => {
+      copyBtn.textContent = previous;
+      copyBtn.classList.remove('copied');
+    }, 1600);
+  });
+});
+document.getElementById('drawer-actions').addEventListener('click', e => {
+  const editBtn = e.target.closest('#drawer-edit-btn');
+  if (editBtn) {
+    if (!canManageBuildings()) return;
+    const record = DATA.find(item => String(item.id) === String(editBtn.dataset.buildingId));
+    openBuildingEditor(record || null);
+    return;
+  }
+  const quotationBtn = e.target.closest('#drawer-quotation-btn');
+  if (quotationBtn) quickCalculateQuotation(quotationBtn.dataset.buildingId);
 });
 document.addEventListener('click', e => {
   const btn = e.target.closest('.lf-popup-action');
@@ -2027,23 +2247,37 @@ function renderMarkers(data) {
 function render(data) {
   lastRenderedData = data;
 
-  const conf = data.filter(r=>r.status==='Permission Confirmed').length;
-  const mou  = data.filter(r=>r.status==='MOU').length;
-  const chk  = data.filter(r=>r.status==='Check Permission').length;
-  const closed = data.filter(r=>r.status==='อาคารปิดถาวร').length;
+  const statusSummarySource = getFiltered({ ignoreStatus: true });
+  const conf = statusSummarySource.filter(r=>r.status==='Permission Confirmed').length;
+  const mou  = statusSummarySource.filter(r=>r.status==='MOU').length;
+  const chk  = statusSummarySource.filter(r=>r.status==='Check Permission').length;
+  const closed = statusSummarySource.filter(r=>r.status==='อาคารปิดถาวร').length;
   document.getElementById('st-confirmed').textContent = conf;
   document.getElementById('st-mou').textContent = mou;
   document.getElementById('st-check').textContent = chk;
   document.getElementById('st-closed').textContent = closed;
   const totalBadge = document.getElementById('total-badge');
   if (totalBadge) totalBadge.textContent = data.length;
-  document.getElementById('result-count').textContent = `แสดง ${data.length} รายการ`;
-  document.getElementById('sb-count').textContent = data.length + ' รายการ';
-  updateLegendCounts(data);
+  const hasQueryOrFilters = Boolean(document.getElementById('search-input')?.value.trim()) ||
+    [...document.querySelectorAll('.flt')].some(select => Boolean(select.value));
+  document.getElementById('result-count').textContent = hasQueryOrFilters
+    ? `พบ ${data.length} จาก ${DATA.length} อาคาร`
+    : `พบ ${data.length} อาคาร`;
+  document.getElementById('sb-count').textContent = data.length + ' อาคาร';
+  updateLegendCounts(statusSummarySource);
 
   // Sidebar list
   const list = document.getElementById('sidebar-list');
   list.innerHTML = '';
+  if (!data.length) {
+    list.innerHTML = `
+      <div class="building-empty-state">
+        <strong>ไม่พบอาคารที่ตรงกับเงื่อนไข</strong>
+        <span>ลองเปลี่ยนคำค้นหาหรือล้างตัวกรองที่เลือกไว้</span>
+        <button type="button" data-reset-filters>ล้างการค้นหาและตัวกรอง</button>
+      </div>`;
+    list.querySelector('[data-reset-filters]')?.addEventListener('click', resetAllFilters);
+  }
   const listFrag = document.createDocumentFragment();
   data.forEach(r => {
     const el = document.createElement('div');
@@ -2070,7 +2304,7 @@ function render(data) {
 }
 
 // ====== FILTERS ======
-function getFiltered() {
+function getFiltered(options = {}) {
   const q = document.getElementById('search-input').value.toLowerCase().trim();
   const fStatus  = document.getElementById('f-status').value;
   const fGroup   = document.getElementById('f-group').value;
@@ -2085,7 +2319,7 @@ function getFiltered() {
     if (q) {
       if (!r._searchText.includes(q)) return false;
     }
-    if (fStatus && r.status !== fStatus) return false;
+    if (!options.ignoreStatus && fStatus && r.status !== fStatus) return false;
     if (fGroup === 'X' && r.group !== 'X') return false;
     if (fGroup && fGroup !== 'X' && r.group !== fGroup) return false;
     if (fType && r.type !== fType) return false;
@@ -2096,7 +2330,56 @@ function getFiltered() {
   });
 }
 
-function applyFilters() { render(getFiltered()); }
+const FILTER_LABELS = {
+  'f-status': 'สถานะ',
+  'f-group': 'กลุ่ม',
+  'f-type': 'ประเภท',
+  'f-install': 'รูปแบบ',
+  'f-survey': 'การสำรวจ',
+  'f-area': 'พื้นที่'
+};
+
+function updateActiveFilterCount() {
+  const activeFilters = [...document.querySelectorAll('.flt')].filter(select => Boolean(select.value));
+  const count = activeFilters.length;
+  const badge = document.getElementById('active-filter-count');
+  const toggle = document.getElementById('filter-toggle');
+  const chips = document.getElementById('active-filter-chips');
+  if (badge) {
+    badge.textContent = String(count);
+    badge.hidden = count === 0;
+  }
+  toggle?.classList.toggle('has-active-filters', count > 0);
+  document.querySelectorAll('.stat-card[data-quick-status]').forEach(card => {
+    const active = document.getElementById('f-status')?.value === card.dataset.quickStatus;
+    card.classList.toggle('active', active);
+    card.setAttribute('aria-pressed', String(active));
+  });
+  if (!chips) return;
+  chips.replaceChildren();
+  activeFilters.forEach(select => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'filter-chip';
+    chip.dataset.filterId = select.id;
+    chip.setAttribute('aria-label', `ลบตัวกรอง ${FILTER_LABELS[select.id] || ''} ${select.value}`);
+    chip.innerHTML = `<span>${esc(FILTER_LABELS[select.id] || 'ตัวกรอง')}: <strong>${esc(select.selectedOptions[0]?.textContent || select.value)}</strong></span><span aria-hidden="true">×</span>`;
+    chips.appendChild(chip);
+  });
+  if (count > 1) {
+    const clear = document.createElement('button');
+    clear.type = 'button';
+    clear.className = 'filter-chip-clear';
+    clear.textContent = 'ล้างทั้งหมด';
+    chips.appendChild(clear);
+  }
+  chips.hidden = count === 0;
+}
+
+function applyFilters() {
+  render(getFiltered());
+  updateActiveFilterCount();
+}
 
 let markerRestoreFrame = null;
 function restoreVisibleMarkers() {
@@ -2125,13 +2408,45 @@ function debounce(fn, delay = 160) {
 const applyFiltersDebounced = debounce(applyFilters, 160);
 
 document.querySelectorAll('.flt').forEach(s => s.addEventListener('change', applyFilters));
-document.getElementById('filter-toggle')?.addEventListener('click', e => {
+document.querySelectorAll('.stat-card[data-quick-status]').forEach(card => {
+  card.addEventListener('click', () => {
+    const statusSelect = document.getElementById('f-status');
+    statusSelect.value = statusSelect.value === card.dataset.quickStatus ? '' : card.dataset.quickStatus;
+    applyFilters();
+  });
+});
+document.getElementById('active-filter-chips')?.addEventListener('click', event => {
+  const chip = event.target.closest('.filter-chip');
+  if (chip) {
+    const select = document.getElementById(chip.dataset.filterId);
+    if (select) select.value = '';
+    applyFilters();
+    return;
+  }
+  if (event.target.closest('.filter-chip-clear')) resetAllFilters();
+});
+function setFilterPanelOpen(open) {
   const filterbar = document.getElementById('filterbar');
-  const collapsed = filterbar.classList.toggle('filters-collapsed');
-  e.currentTarget.setAttribute('aria-expanded', String(!collapsed));
-  const label = e.currentTarget.querySelector('.filter-toggle-text');
-  if (label) label.textContent = collapsed ? 'แสดงตัวกรอง' : 'ตัวกรอง';
+  const toggle = document.getElementById('filter-toggle');
+  filterbar?.classList.toggle('filters-collapsed', !open);
+  toggle?.setAttribute('aria-expanded', String(open));
+  toggle?.classList.toggle('panel-open', open);
   setTimeout(() => map.invalidateSize(), 240);
+}
+
+document.getElementById('filter-toggle')?.addEventListener('click', () => {
+  const filterbar = document.getElementById('filterbar');
+  setFilterPanelOpen(filterbar?.classList.contains('filters-collapsed'));
+});
+document.getElementById('filter-close')?.addEventListener('click', () => setFilterPanelOpen(false));
+document.addEventListener('click', event => {
+  const filterbar = document.getElementById('filterbar');
+  const toggle = document.getElementById('filter-toggle');
+  if (!filterbar || filterbar.classList.contains('filters-collapsed')) return;
+  if (!filterbar.contains(event.target) && !toggle?.contains(event.target)) setFilterPanelOpen(false);
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') setFilterPanelOpen(false);
 });
 document.getElementById('legend-toggle')?.addEventListener('click', e => {
   const panel = document.getElementById('legend-panel');
@@ -2148,7 +2463,7 @@ document.querySelectorAll('.layer-toggle').forEach(btn => {
   });
 });
 
-document.getElementById('btn-reset').addEventListener('click', () => {
+function resetAllFilters() {
   document.getElementById('search-input').value = '';
   document.getElementById('search-clear').style.display = 'none';
   document.querySelectorAll('.flt').forEach(s => { s.value = ''; s.classList.remove('active'); });
@@ -2159,7 +2474,8 @@ document.getElementById('btn-reset').addEventListener('click', () => {
   });
   document.getElementById('autocomplete').style.display = 'none';
   applyFilters();
-});
+}
+document.getElementById('btn-reset').addEventListener('click', resetAllFilters);
 
 // ====== AUTOCOMPLETE ======
 const searchInput = document.getElementById('search-input');
@@ -2174,7 +2490,11 @@ searchInput.addEventListener('input', () => {
   const matches = DATA.filter(r =>
     r._nameSearchText.includes(q)
   ).slice(0, 10);
-  if (!matches.length) { ac.style.display = 'none'; return; }
+  if (!matches.length) {
+    ac.innerHTML = '<div class="autocomplete-empty">ไม่พบอาคารที่ตรงกับคำค้นหา</div>';
+    ac.style.display = 'block';
+    return;
+  }
   ac.innerHTML = matches.map(r => `
     <div class="ac-item" data-id="${attrEsc(r.id)}">
       <div class="ac-dot" style="background:${statusColor(r.status)}"></div>
@@ -3338,15 +3658,13 @@ async function loadLibraryFromSources(sources, globalName) {
 
 function loadImageLibrary() {
   return loadLibraryFromSources([
-    'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
-    'https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js'
+    'assets/vendor/export/html2canvas.min.js'
   ], 'html2canvas');
 }
 
 function loadJsPdfLibrary() {
   return loadLibraryFromSources([
-    'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
-    'https://unpkg.com/jspdf@2.5.1/dist/jspdf.umd.min.js'
+    'assets/vendor/export/jspdf.umd.min.js'
   ], 'jspdf');
 }
 
@@ -3364,7 +3682,10 @@ function setQuotationExportEnabled(enabled) {
     'quotation-copy-preview-btn'
   ].forEach(id => {
     const btn = document.getElementById(id);
-    if (btn) btn.disabled = !enabled;
+    if (btn) {
+      btn.disabled = !enabled;
+      btn.title = enabled ? '' : 'กรุณาคำนวณราคาก่อน';
+    }
   });
 }
 
@@ -3448,10 +3769,207 @@ function canAutoCalculateQuotation() {
 function scheduleQuotationAutoCalculate() {
   clearTimeout(quotationAutoCalcTimer);
   quotationAutoCalcTimer = setTimeout(() => {
-    if (canAutoCalculateQuotation()) {
+    if (currentQuotationStep >= 3 && canAutoCalculateQuotation()) {
       calculateQuotation({ auto: true, silent: true });
     }
   }, 700);
+}
+
+const QUOTATION_DRAFT_STORAGE_KEY = 'permission_next_quotation_drafts_v1';
+let currentQuotationStep = 1;
+
+function clearQuotationFieldErrors() {
+  document.querySelectorAll('.quotation-form-group.has-error').forEach(group => group.classList.remove('has-error'));
+  document.querySelectorAll('.quotation-field-error').forEach(el => el.remove());
+}
+
+function setQuotationFieldError(inputId, message) {
+  const input = document.getElementById(inputId);
+  const group = input?.closest('.quotation-form-group');
+  if (!input || !group) return false;
+  group.classList.add('has-error');
+  const error = document.createElement('small');
+  error.className = 'quotation-field-error';
+  error.textContent = message;
+  group.appendChild(error);
+  return true;
+}
+
+function validateQuotationStep(step, { focus = true } = {}) {
+  clearQuotationFieldErrors();
+  const building = window.currentBuildingData || {};
+  const errors = [];
+  if (step === 1) {
+    if (!document.getElementById('quotation-customer')?.value.trim()) {
+      errors.push(['quotation-customer', 'กรุณากรอกชื่อลูกค้า']);
+    }
+    if (!QE().parseFloorInput(document.getElementById('quotation-cust-floor')?.value)) {
+      errors.push(['quotation-cust-floor', 'กรอกชั้นลูกค้า เช่น 20, B1 หรือ G']);
+    }
+  }
+  if (step === 2) {
+    const wm = getQuotationWmFloor(building);
+    if (wm.error) {
+      const wmId = document.getElementById('quotation-wm-group')?.style.display !== 'none'
+        ? 'quotation-wm-select' : 'quotation-wm-manual';
+      errors.push([wmId, wm.error]);
+    }
+    const hwireRaw = document.getElementById('quotation-hwire')?.value ?? '';
+    const hwire = Number(hwireRaw);
+    const hwireCheck = QE().checkHorizontalDistance(hwire, building.max_horizontal);
+    if (hwireRaw === '' || !Number.isFinite(hwire) || hwire < 0) {
+      errors.push(['quotation-hwire', 'กรุณากรอกระยะสายเป็นตัวเลขตั้งแต่ 0 เมตรขึ้นไป']);
+    } else if (hwireCheck.level === 'error') {
+      errors.push(['quotation-hwire', hwireCheck.message]);
+    }
+  }
+  if (step === 3) {
+    const requirements = getPermissionInputRequirements(building);
+    const integerFields = [
+      ['quotation-shaft-times', requirements?.needsShaftTimes, 0, 'จำนวนครั้งที่ใช้ Shaft'],
+      ['quotation-circuit-count', requirements?.needsCircuitCount, 1, 'จำนวนวงจร'],
+      ['quotation-ot-nights', requirements?.needsOtNights, 0, 'จำนวนคืนทำงานนอกเวลา'],
+      ['quotation-contract-years', requirements?.needsContractYears, 1, 'อายุสัญญา']
+    ];
+    integerFields.forEach(([id, required, min, label]) => {
+      if (!required) return;
+      const value = Number(document.getElementById(id)?.value);
+      if (!Number.isInteger(value) || value < min) errors.push([id, `กรอก${label}เป็นจำนวนเต็มตั้งแต่ ${min} ขึ้นไป`]);
+    });
+    const fees = getBuildingBoqFees(building).filter(item => item.payable && item.calculation_type === 'revenue_share');
+    if (fees.some(item => item.revenue_period !== 'annual')) {
+      const raw = document.getElementById('quotation-monthly-revenue')?.value ?? '';
+      const value = Number(raw);
+      if (raw === '' || !Number.isFinite(value) || value < 0) errors.push(['quotation-monthly-revenue', 'กรุณากรอกรายได้ต่อเดือน']);
+    }
+    if (fees.some(item => item.revenue_period === 'annual')) {
+      const raw = document.getElementById('quotation-annual-revenue')?.value ?? '';
+      const value = Number(raw);
+      if (raw === '' || !Number.isFinite(value) || value < 0) errors.push(['quotation-annual-revenue', 'กรุณากรอกรายได้ต่อปี']);
+    }
+  }
+  errors.forEach(([id, message]) => setQuotationFieldError(id, message));
+  if (errors.length && focus) document.getElementById(errors[0][0])?.focus();
+  return errors.length === 0;
+}
+
+function validateQuotationAllFields() {
+  for (let step = 1; step <= 3; step += 1) {
+    if (!validateQuotationStep(step, { focus: false })) {
+      setQuotationStep(step);
+      validateQuotationStep(step, { focus: true });
+      return false;
+    }
+  }
+  clearQuotationFieldErrors();
+  return true;
+}
+
+function setQuotationStep(step, options = {}) {
+  currentQuotationStep = Math.min(4, Math.max(1, Number(step) || 1));
+  document.querySelectorAll('.quotation-step-panel').forEach(panel => {
+    const active = Number(panel.dataset.quotationStep) === currentQuotationStep;
+    panel.hidden = !active;
+    panel.classList.toggle('active', active);
+  });
+  document.querySelectorAll('[data-quotation-step-target]').forEach(button => {
+    const buttonStep = Number(button.dataset.quotationStepTarget);
+    button.classList.toggle('active', buttonStep === currentQuotationStep);
+    button.classList.toggle('complete', buttonStep < currentQuotationStep);
+    if (buttonStep === currentQuotationStep) button.setAttribute('aria-current', 'step');
+    else button.removeAttribute('aria-current');
+  });
+  const back = document.getElementById('quotation-back-btn');
+  const next = document.getElementById('quotation-next-btn');
+  const calculate = document.getElementById('quotation-calculate-btn');
+  const preview = document.getElementById('quotation-go-preview-btn');
+  if (back) back.hidden = currentQuotationStep === 1;
+  if (next) next.hidden = currentQuotationStep >= 3;
+  if (calculate) calculate.hidden = currentQuotationStep < 3;
+  if (preview) preview.hidden = currentQuotationStep !== 4;
+  if (options.focus !== false) {
+    document.querySelector(`.quotation-step-panel[data-quotation-step="${currentQuotationStep}"] input:not([type="hidden"]), .quotation-step-panel[data-quotation-step="${currentQuotationStep}"] select`)?.focus();
+  }
+}
+
+function getQuotationDraftContextKey() {
+  const userKey = normalizeEmail(currentUser?.email || 'local');
+  const building = window.currentBuildingData || {};
+  return `${userKey}|${building.id ?? building._docId ?? 'unknown'}`;
+}
+
+function getQuotationDraftHistory() {
+  try {
+    const store = JSON.parse(localStorage.getItem(QUOTATION_DRAFT_STORAGE_KEY) || '{}');
+    return Array.isArray(store[getQuotationDraftContextKey()]) ? store[getQuotationDraftContextKey()] : [];
+  } catch (error) {
+    console.warn('อ่านร่างใบประเมินไม่สำเร็จ:', error);
+    return [];
+  }
+}
+
+function refreshQuotationDraftHistory() {
+  const history = getQuotationDraftHistory();
+  const select = document.getElementById('quotation-draft-history');
+  const status = document.getElementById('quotation-draft-status');
+  const version = document.getElementById('quotation-version-badge');
+  if (select) {
+    select.innerHTML = history.length
+      ? history.map((item, index) => `<option value="${index}">ฉบับที่ ${item.version} • ${new Date(item.savedAt).toLocaleString('th-TH')}</option>`).join('')
+      : '<option value="">ยังไม่มีร่าง</option>';
+  }
+  if (status) status.textContent = history.length ? `บันทึกล่าสุด ${new Date(history[0].savedAt).toLocaleString('th-TH')}` : 'ยังไม่ได้บันทึกร่าง';
+  if (version) version.textContent = `ฉบับที่ ${history[0]?.version || 1}`;
+}
+
+function showQuotationWorkflowMessage(message, isError = false) {
+  const box = document.getElementById('quotation-message');
+  if (!box) return;
+  box.className = isError ? 'error' : 'success';
+  box.innerHTML = iconText(isError ? 'x' : 'check', message);
+  box.style.display = 'block';
+}
+
+function saveQuotationDraft() {
+  try {
+    const store = JSON.parse(localStorage.getItem(QUOTATION_DRAFT_STORAGE_KEY) || '{}');
+    const key = getQuotationDraftContextKey();
+    const history = Array.isArray(store[key]) ? store[key] : [];
+    const item = {
+      savedAt: new Date().toISOString(),
+      version: Number(history[0]?.version || 0) + 1,
+      step: currentQuotationStep,
+      state: JSON.parse(serializeQuotationState())
+    };
+    store[key] = [item, ...history].slice(0, 10);
+    localStorage.setItem(QUOTATION_DRAFT_STORAGE_KEY, JSON.stringify(store));
+    refreshQuotationDraftHistory();
+    rememberQuotationState();
+    showQuotationWorkflowMessage(`บันทึกร่างฉบับที่ ${item.version} แล้ว`);
+  } catch (error) {
+    showQuotationWorkflowMessage('บันทึกร่างไม่สำเร็จ: ' + error.message, true);
+  }
+}
+
+function loadQuotationDraft() {
+  const history = getQuotationDraftHistory();
+  const selectedIndex = Number(document.getElementById('quotation-draft-history')?.value || 0);
+  const draft = history[selectedIndex];
+  if (!draft) {
+    showQuotationWorkflowMessage('ยังไม่มีร่างสำหรับอาคารนี้', true);
+    return;
+  }
+  _updateQuotationDynamicInputs();
+  (draft.state || []).forEach(([id, value]) => {
+    if (id === 'calculated') return;
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  });
+  invalidateQuotationResult();
+  setQuotationStep(draft.step || 1, { focus: false });
+  updateHorizontalWireWarning();
+  rememberQuotationState();
+  showQuotationWorkflowMessage(`เรียกคืนร่างฉบับที่ ${draft.version} แล้ว`);
 }
 
 function switchQuotationMobileTab(tab) {
@@ -3475,6 +3993,9 @@ function openQuotationModal() {
   openDialogAccessibility(modal, document.getElementById('quotation-customer'));
   initializeQuotationMeta(window.currentBuildingData || {});
   _updateQuotationDynamicInputs();
+  clearQuotationFieldErrors();
+  setQuotationStep(1, { focus: false });
+  refreshQuotationDraftHistory();
   rememberQuotationState();
 }
 
@@ -3728,6 +4249,13 @@ function calculateQuotation(options = {}) {
   window._quotationCalculated = false;
   window.currentQuotationSnapshot = null;
   setQuotationExportEnabled(false);
+
+  if (!validateQuotationAllFields()) {
+    msgEl.className = 'error';
+    msgEl.innerHTML = iconText('x', 'กรุณาตรวจสอบช่องที่ทำเครื่องหมายไว้');
+    msgEl.style.display = 'block';
+    return;
+  }
 
   // Validate customer name
   if (!customerName) {
@@ -4057,8 +4585,8 @@ function calculateQuotation(options = {}) {
     permissionDataIssues.length
       ? 'ยอดประเมินจากข้อมูลที่คำนวณได้'
       : revenueShareFees.length || monthlyOpexTotal > 0 || annualOpexTotal > 0
-      ? 'ยอดเริ่มต้นที่ต้องชำระ'
-      : 'ยอดรวมที่ต้องชำระ';
+      ? 'ค่าใช้จ่ายเริ่มต้นโดยประมาณ'
+      : 'ราคาประเมินรวม';
 
   document.getElementById('quotation-total-cost').textContent = formatCurrency(totalCost);
   window.currentQuotationSnapshot = {
@@ -4142,6 +4670,12 @@ function calculateQuotation(options = {}) {
     document.getElementById('prev-sales-person').textContent = window._quotationMeta.salesPerson;
   }
   document.getElementById('prev-distance').textContent = `${totalCableDistance} ม. (แนวตั้ง ${verticalDistance} + แนวนอน ${hwireInput})`;
+  document.getElementById('prev-highlight-distance').textContent = `${formatCurrencyNumeric(totalCableDistance)} เมตร`;
+  document.getElementById('prev-highlight-capex').textContent = formatCurrencyNumeric(capexTotal) + ' บาท';
+  document.getElementById('prev-highlight-monthly').textContent = monthlyOpexTotal + revenueShareMonthlyTotal > 0
+    ? formatCurrencyNumeric(monthlyOpexTotal + revenueShareMonthlyTotal) + ' บาท'
+    : 'ไม่มี';
+  document.getElementById('prev-highlight-total').textContent = formatCurrencyNumeric(totalCost) + ' บาท';
   document.getElementById('prev-cable-cost').textContent = formatCurrencyNumeric(cableCost) + ' บาท';
   document.getElementById('prev-equipment-cost').textContent = formatCurrencyNumeric(equipmentCost) + ' บาท';
   document.getElementById('prev-odf-cost').textContent = formatCurrencyNumeric(odfCost) + ' บาท';
@@ -4217,8 +4751,8 @@ function calculateQuotation(options = {}) {
     permissionDataIssues.length
       ? 'ยอดประเมินจากข้อมูลที่คำนวณได้'
       : revenueShareFees.length || monthlyOpexTotal > 0 || annualOpexTotal > 0
-      ? 'ยอดเริ่มต้นที่ต้องชำระ'
-      : 'ยอดรวมที่ต้องชำระ';
+      ? 'ค่าใช้จ่ายเริ่มต้นโดยประมาณ'
+      : 'ราคาประเมินรวม';
   document.getElementById('prev-total').textContent = formatCurrencyNumeric(totalCost) + ' บาท';
 
   markQuotationCalculated();
@@ -4675,7 +5209,7 @@ function resetQuotationForm(options = {}) {
   document.getElementById('quotation-installation-subtotal').textContent = formatCurrency(baseInstallationCost);
   document.getElementById('quotation-building-fees').innerHTML = '';
   document.getElementById('quotation-revenue-share-summary').innerHTML = '';
-  document.getElementById('quotation-total-label').textContent = 'ยอดรวมที่ต้องชำระ';
+  document.getElementById('quotation-total-label').textContent = 'ราคาประเมินรวม';
   document.getElementById('quotation-total-cost').textContent = formatCurrency(baseInstallationCost);
   document.getElementById('quotation-message').style.display = 'none';
   resetQuotationExportMessage();
@@ -4696,6 +5230,10 @@ function resetQuotationForm(options = {}) {
   if (remarkBlock) remarkBlock.hidden = true;
   document.getElementById('prev-remark').textContent = '-';
   document.getElementById('prev-distance').textContent = '-';
+  document.getElementById('prev-highlight-distance').textContent = '-';
+  document.getElementById('prev-highlight-capex').textContent = '-';
+  document.getElementById('prev-highlight-monthly').textContent = '-';
+  document.getElementById('prev-highlight-total').textContent = '-';
   document.getElementById('prev-cable-cost').textContent = '-';
   document.getElementById('prev-equipment-cost').textContent = formatCurrencyNumeric(calculationProfile.equipment_cost) + ' บาท';
   document.getElementById('prev-odf-cost').textContent = formatCurrencyNumeric(calculationProfile.odf_cost) + ' บาท';
@@ -4704,7 +5242,7 @@ function resetQuotationForm(options = {}) {
   document.getElementById('prev-building-fees-table').innerHTML = '';
   document.getElementById('prev-cost-breakdown').innerHTML = '';
   document.getElementById('prev-revenue-share-summary').innerHTML = '';
-  document.getElementById('prev-total-label').textContent = 'ยอดรวมที่ต้องชำระ';
+  document.getElementById('prev-total-label').textContent = 'ราคาประเมินรวม';
   document.getElementById('prev-total').textContent = '-';
   window._quotationCalculated = false;
   window.currentQuotationSnapshot = null;
@@ -4715,6 +5253,97 @@ function resetQuotationForm(options = {}) {
   setQuotationExportEnabled(false);
   initializeQuotationMeta(buildingData || {});
   _updateQuotationDynamicInputs();
+}
+
+function initDesktopAppUpdater() {
+  const updater = window.permissionUpdates;
+  const menuButton = document.getElementById('app-update-menu-btn');
+  const menuBadge = document.getElementById('app-update-menu-badge');
+  const modal = document.getElementById('app-update-modal');
+  const statusText = document.getElementById('app-update-status');
+  const currentVersion = document.getElementById('app-current-version');
+  const newVersionWrap = document.getElementById('app-new-version-wrap');
+  const newVersion = document.getElementById('app-new-version');
+  const progressWrap = document.getElementById('app-update-progress');
+  const progressBar = document.getElementById('app-update-progress-bar');
+  const progressValue = document.getElementById('app-update-progress-value');
+  const closeButton = document.getElementById('app-update-close-btn');
+  const checkButton = document.getElementById('app-update-check-btn');
+  const installButton = document.getElementById('app-update-install-btn');
+  if (!updater || !menuButton || !modal) return;
+
+  menuButton.hidden = false;
+
+  function closeUpdateModal() {
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden', 'true');
+    closeDialogAccessibility(modal);
+  }
+
+  function openUpdateModal() {
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden', 'false');
+    openDialogAccessibility(modal, closeButton);
+  }
+
+  function renderUpdateState(state) {
+    if (!state) return;
+    const busy = ['checking', 'available', 'downloading'].includes(state.status);
+    const hasUpdate = ['available', 'downloading', 'downloaded'].includes(state.status);
+    const percent = Math.max(0, Math.min(100, Number(state.percent) || 0));
+
+    if (statusText) {
+      statusText.textContent = state.message || 'พร้อมตรวจสอบอัปเดต';
+      statusText.classList.toggle('is-error', state.status === 'error');
+      statusText.classList.toggle('is-success', ['up-to-date', 'downloaded'].includes(state.status));
+    }
+    if (currentVersion) currentVersion.textContent = `v${state.currentVersion || '-'}`;
+    if (newVersionWrap) newVersionWrap.hidden = !state.availableVersion;
+    if (newVersion) newVersion.textContent = state.availableVersion ? `v${state.availableVersion}` : '-';
+    if (progressWrap) progressWrap.hidden = !['available', 'downloading', 'downloaded'].includes(state.status);
+    if (progressBar) progressBar.value = percent;
+    if (progressValue) progressValue.textContent = `${Math.round(percent)}%`;
+    if (checkButton) {
+      checkButton.disabled = busy || state.status === 'downloaded' || !state.supported;
+      checkButton.textContent = state.status === 'checking' ? 'กำลังตรวจสอบ...' : 'ตรวจสอบอีกครั้ง';
+    }
+    if (installButton) installButton.hidden = state.status !== 'downloaded';
+    if (menuBadge) {
+      menuBadge.hidden = !hasUpdate;
+      menuBadge.classList.toggle('ready', state.status === 'downloaded');
+    }
+    menuButton.classList.toggle('has-update', hasUpdate);
+  }
+
+  menuButton.addEventListener('click', openUpdateModal);
+  closeButton?.addEventListener('click', closeUpdateModal);
+  modal.addEventListener('click', event => {
+    if (event.target === modal) closeUpdateModal();
+  });
+  checkButton?.addEventListener('click', async () => {
+    try {
+      renderUpdateState(await updater.check());
+    } catch (error) {
+      renderUpdateState({
+        currentVersion: currentVersion?.textContent.replace(/^v/, '') || '-',
+        status: 'error',
+        supported: true,
+        message: error?.message || 'ตรวจสอบอัปเดตไม่สำเร็จ'
+      });
+    }
+  });
+  installButton?.addEventListener('click', () => updater.install());
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && modal.classList.contains('open')) {
+      event.stopImmediatePropagation();
+      closeUpdateModal();
+    }
+  });
+
+  updater.onState(renderUpdateState);
+  updater.getState().then(renderUpdateState).catch(() => {
+    menuButton.hidden = true;
+  });
 }
 
 // Quotation button event listener
@@ -4737,10 +5366,20 @@ document.addEventListener('DOMContentLoaded', function() {
   const buildingEditorCancelBtn = document.getElementById('building-editor-cancel-btn');
   const buildingEditorDeleteBtn = document.getElementById('building-editor-delete-btn');
   const otherFeeAddBtn = document.getElementById('other-fee-add-btn');
+  const loginSubmitBtn = loginForm?.querySelector('.auth-submit');
   document.addEventListener('keydown', trapDialogTabKey);
   applyFieldAriaLabels();
+  initDesktopAppUpdater();
   const hasRememberedUser = showRememberedUser();
   if (hasRememberedUser) document.getElementById('login-password')?.focus();
+  setTimeout(() => {
+    if (!window.FSDB && document.body.classList.contains('auth-locked')) {
+      setBoxMessage(
+        'login-message',
+        'ยังเชื่อมต่อระบบข้อมูลผู้ใช้ไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ตหรือเครือข่ายบริษัท'
+      );
+    }
+  }, 10000);
 
   document.getElementById('change-login-user')?.addEventListener('click', function() {
     const emailInput = document.getElementById('login-email');
@@ -4767,7 +5406,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     menu.addEventListener('click', function(e) {
-      if (e.target.closest('button')) setTimeout(() => setOpen(false), 0);
+      const button = e.target.closest('button');
+      if (button && button.id !== 'current-user-pill') setTimeout(() => setOpen(false), 0);
     }, true);
 
     document.addEventListener('click', function(e) {
@@ -4776,6 +5416,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.addEventListener('keydown', function(e) {
       if (e.key === 'Escape') setOpen(false);
+    });
+  })();
+
+  (function initAccountMenu(){
+    const account = document.getElementById('account-menu');
+    const toggle = document.getElementById('current-user-pill');
+    const panel = document.getElementById('account-menu-panel');
+    if (!account || !toggle || !panel) return;
+
+    function setOpen(open) {
+      panel.hidden = !open;
+      toggle.setAttribute('aria-expanded', String(open));
+      account.classList.toggle('open', open);
+    }
+
+    toggle.addEventListener('click', function(event) {
+      event.stopPropagation();
+      setOpen(panel.hidden);
+    });
+    panel.addEventListener('click', function(event) {
+      if (event.target.closest('button')) setOpen(false);
+    });
+    document.addEventListener('click', function(event) {
+      if (!account.contains(event.target)) setOpen(false);
+    });
+    document.addEventListener('keydown', function(event) {
+      if (event.key === 'Escape') setOpen(false);
     });
   })();
 
@@ -4892,11 +5559,20 @@ document.addEventListener('DOMContentLoaded', function() {
       setBoxMessage('login-message', '');
       const email = document.getElementById('login-email')?.value;
       const password = document.getElementById('login-password')?.value;
+      if (loginSubmitBtn) {
+        loginSubmitBtn.disabled = true;
+        loginSubmitBtn.textContent = 'กำลังเข้าสู่ระบบ...';
+      }
       try {
         await loginWithPassword(email, password);
         loginForm.reset();
       } catch (err) {
         setBoxMessage('login-message', err.message || 'เข้าสู่ระบบไม่สำเร็จ');
+      } finally {
+        if (loginSubmitBtn) {
+          loginSubmitBtn.disabled = false;
+          loginSubmitBtn.textContent = 'เข้าสู่ระบบ';
+        }
       }
     });
   }
@@ -5026,7 +5702,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   document.addEventListener('keydown', function(e) {
     if (e.key !== 'Escape') return;
-    if (userAdminModal?.classList.contains('open')) {
+    if (document.getElementById('app-update-modal')?.classList.contains('open')) {
+      return;
+    } else if (userAdminModal?.classList.contains('open')) {
       closeUserAdminModal();
     } else if (buildingEditorModal?.classList.contains('open')) {
       closeBuildingEditor();
@@ -5035,10 +5713,38 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
-  document.getElementById('quotation-calculate-btn')?.addEventListener('click', () => calculateQuotation());
+  document.getElementById('quotation-calculate-btn')?.addEventListener('click', () => {
+    calculateQuotation();
+    if (window._quotationCalculated) setQuotationStep(4, { focus: false });
+  });
+  document.getElementById('quotation-back-btn')?.addEventListener('click', () => setQuotationStep(currentQuotationStep - 1));
+  document.getElementById('quotation-next-btn')?.addEventListener('click', () => {
+    if (validateQuotationStep(currentQuotationStep)) setQuotationStep(currentQuotationStep + 1);
+  });
+  document.querySelectorAll('[data-quotation-step-target]').forEach(button => {
+    button.addEventListener('click', () => {
+      const target = Number(button.dataset.quotationStepTarget);
+      if (target === 4 && !window._quotationCalculated) {
+        calculateQuotation();
+        if (!window._quotationCalculated) return;
+      } else if (target > currentQuotationStep && !validateQuotationStep(currentQuotationStep)) {
+        return;
+      }
+      setQuotationStep(target);
+    });
+  });
+  document.getElementById('quotation-go-preview-btn')?.addEventListener('click', () => {
+    if (!window._quotationCalculated) calculateQuotation();
+    if (window._quotationCalculated) switchQuotationMobileTab('preview');
+  });
+  document.getElementById('quotation-save-draft-btn')?.addEventListener('click', saveQuotationDraft);
+  document.getElementById('quotation-load-draft-btn')?.addEventListener('click', loadQuotationDraft);
+  document.getElementById('quotation-header-close')?.addEventListener('click', closeQuotationModal);
   document.getElementById('quotation-reset-btn')?.addEventListener('click', () => {
     if (quotationStateChanged() && !confirm(UNSAVED_CHANGES_CONFIRM_MESSAGE)) return;
     resetQuotationForm();
+    clearQuotationFieldErrors();
+    setQuotationStep(1, { focus: false });
     rememberQuotationState();
   });
   document.getElementById('quotation-close-btn')?.addEventListener('click', closeQuotationModal);
@@ -5054,8 +5760,13 @@ document.addEventListener('DOMContentLoaded', function() {
   QUOTATION_STATE_IDS.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.addEventListener('input', onQuotationInputChanged);
-    el.addEventListener('change', onQuotationInputChanged);
+    const clearOwnError = () => {
+      const group = el.closest('.quotation-form-group');
+      group?.classList.remove('has-error');
+      group?.querySelector('.quotation-field-error')?.remove();
+    };
+    el.addEventListener('input', () => { clearOwnError(); onQuotationInputChanged(); });
+    el.addEventListener('change', () => { clearOwnError(); onQuotationInputChanged(); });
   });
   
   const quotationInputChain = [

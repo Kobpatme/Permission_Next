@@ -1,0 +1,65 @@
+{
+  "name": "permission-next",
+  "version": "1.2.2",
+  "description": "Permission Next Desktop App",
+  "main": "electron-main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "check": "node --check app.js && node --check dev-server.js && node --check electron-main.js && node --check electron-preload.js && node --check firebase-diagnostics.js && node --check scripts/build-installer.js && node --check scripts/firebase-smoke.js && npm test && npm audit --package-lock-only",
+    "dist": "node scripts/build-installer.js",
+    "dist:installer": "node scripts/build-installer.js",
+    "dist:portable": "electron-builder --win portable"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.uih.permissionnext",
+    "productName": "Permission Next",
+    "compression": "maximum",
+    "electronDownload": {
+      "cache": ".electron-cache"
+    },
+    "files": [
+      "Permission_Next.html",
+      "app.js",
+      "ui.js",
+      "style.css",
+      "firebase-init.js",
+      "firebase-diagnostics.js",
+      "quotation-engine.js",
+      "dev-server.js",
+      "electron-main.js",
+      "electron-preload.js",
+      "assets/uih-logo.png",
+      "assets/vendor/**/*"
+    ],
+    "electronLanguages": [
+      "en-US",
+      "th"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/uih-logo.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "Permission_Next_Setup_v${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "Permission_Next_v${version}.exe"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}

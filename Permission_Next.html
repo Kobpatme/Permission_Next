@@ -4,11 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Permission Next — Map Dashboard</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" onerror="window._leafletLoadFailed=true"></script>
-<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js" onerror="window._markerClusterLoadFailed=true"></script>
+<link rel="stylesheet" href="assets/vendor/leaflet/leaflet.css"/>
+<link rel="stylesheet" href="assets/vendor/leaflet-markercluster/MarkerCluster.css"/>
+<link rel="stylesheet" href="assets/vendor/leaflet-markercluster/MarkerCluster.Default.css"/>
+<script src="assets/vendor/leaflet/leaflet.js" onerror="window._leafletLoadFailed=true"></script>
+<script src="assets/vendor/leaflet-markercluster/leaflet.markercluster.js" onerror="window._markerClusterLoadFailed=true"></script>
+<script src="firebase-diagnostics.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body class="auth-locked">
@@ -73,7 +74,7 @@
 <div id="topbar">
   <div class="logo">
     <img src="assets/uih-logo.png" class="logo-icon" alt="UIH Logo" style="height: 40px; width: auto;">
-    <div class="product-lockup"><span>BUILDING INTELLIGENCE</span><h1>Permission <b>Next</b></h1></div>
+    <div class="product-lockup"><span>ระบบข้อมูลอาคาร</span><h1>Permission <b>Next</b></h1></div>
   </div>
 
   <div class="topbar-search" role="search">
@@ -83,6 +84,11 @@
       <button id="search-clear" title="ล้างการค้นหา"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
       <div id="autocomplete"></div>
     </div>
+    <button id="filter-toggle" type="button" aria-expanded="false" aria-controls="filterbar">
+      <svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16l-6.5 7.2V18l-3 1.5v-7.3L4 5Z"/></svg>
+      <span class="filter-toggle-text">ตัวกรอง</span>
+      <span id="active-filter-count" hidden>0</span>
+    </button>
     <span id="result-count"></span>
   </div>
 
@@ -93,42 +99,52 @@
   <div id="topbar-actions" class="topbar-actions">
     <div class="topbar-group topbar-primary-actions">
       <button id="add-building-btn" type="button"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg> เพิ่มอาคาร</button>
-      <button id="building-toggle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> อาคาร</button>
     </div>
     <div class="topbar-group topbar-user-actions">
-      <button id="user-manage-btn" class="auth-only-admin" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg> ผู้ใช้</button>
-      <button id="export-csv-btn" class="auth-only-admin" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> CSV</button>
-      <div class="user-pill" id="current-user-pill" title="ผู้ใช้ปัจจุบัน"><strong>-</strong><span>-</span></div>
-      <button id="theme-btn" title="เปลี่ยนธีม"><svg id="theme-ico" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> <span id="theme-label">Light</span></button>
-      <button id="logout-btn" type="button"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg> ออก</button>
+      <div class="account-menu" id="account-menu">
+        <button class="user-pill" id="current-user-pill" type="button" title="เมนูบัญชี" aria-expanded="false" aria-controls="account-menu-panel">
+          <span class="user-avatar" aria-hidden="true">U</span><span class="user-copy"><strong>-</strong><span>-</span></span>
+          <svg class="svg-icon account-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+        </button>
+        <div class="account-menu-panel" id="account-menu-panel" role="menu" hidden>
+          <button id="user-manage-btn" class="auth-only-admin" type="button" role="menuitem"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></svg> จัดการผู้ใช้</button>
+          <button id="export-csv-btn" class="auth-only-admin" type="button" role="menuitem"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> ส่งออก CSV</button>
+          <button id="theme-btn" type="button" role="menuitem" title="เปลี่ยนธีม"><svg id="theme-ico" class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg> <span id="theme-label">โหมดสว่าง</span></button>
+          <button id="app-update-menu-btn" type="button" role="menuitem" hidden><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/><path d="M3 12A9 9 0 0 1 18.5 5.8L21 8"/><path d="M21 3v5h-5"/></svg> <span>อัปเดตโปรแกรม</span><i id="app-update-menu-badge" hidden></i></button>
+          <div class="account-menu-divider"></div>
+          <button id="logout-btn" type="button" role="menuitem"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg> ออกจากระบบ</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
 <!-- FILTER BAR -->
 <div id="filterbar" class="filters-collapsed">
-  <button id="filter-toggle" type="button" aria-expanded="false"><svg class="svg-icon chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg><span class="filter-toggle-text">แสดงตัวกรอง</span></button>
+  <div class="filter-panel-head">
+    <div><strong>ตัวกรองอาคาร</strong><span>เลือกได้มากกว่าหนึ่งเงื่อนไข</span></div>
+    <button id="filter-close" type="button" aria-label="ปิดตัวกรอง"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+  </div>
   <div class="filter-controls">
-    <span class="filter-label">กรอง:</span>
     <select class="flt" id="f-status" aria-label="กรองตามสถานะ">
-      <option value="">Status ทั้งหมด</option>
+      <option value="">สถานะทั้งหมด</option>
       <option>Permission Confirmed</option>
       <option>MOU</option>
       <option>Check Permission</option>
       <option>อาคารปิดถาวร</option>
     </select>
     <select class="flt" id="f-group" aria-label="กรองตามกลุ่ม">
-      <option value="">Group ทั้งหมด</option>
+      <option value="">กลุ่มทั้งหมด</option>
       <option>Priority 1</option>
       <option>Priority 2</option>
       <option value="X">X</option>
     </select>
     <select class="flt" id="f-type" aria-label="กรองตามประเภท">
-      <option value="">Type ทั้งหมด</option>
+      <option value="">ประเภททั้งหมด</option>
       <option>L1</option><option>L2</option><option>L3</option>
     </select>
     <select class="flt" id="f-install" aria-label="กรองตามรูปแบบการติดตั้ง">
-      <option value="">Install ทั้งหมด</option>
+      <option value="">รูปแบบทั้งหมด</option>
       <option>Building</option>
       <option>Shopping Mall</option>
       <option>Nikom</option>
@@ -138,20 +154,22 @@
       <option>Market</option>
     </select>
     <select class="flt" id="f-survey" aria-label="กรองตามประเภทการสำรวจ">
-      <option value="">Survey ทั้งหมด</option>
+      <option value="">การสำรวจทั้งหมด</option>
       <option>Auto</option>
       <option>Need Survey</option>
       <option>Need Mark</option>
       <option>Wait Check</option>
     </select>
     <select class="flt" id="f-area" aria-label="กรองตามพื้นที่">
-      <option value="">Area ทั้งหมด</option>
+      <option value="">พื้นที่ทั้งหมด</option>
       <option>BKK1</option><option>BKK2</option><option>BKK3</option><option>BKK4</option>
       <option>CMI</option><option>CBI</option><option>RYG</option><option>PKT</option><option>SNI</option>
     </select>
     <button id="btn-reset">รีเซ็ต</button>
   </div>
 </div>
+
+<div id="active-filter-chips" aria-live="polite" hidden></div>
 
 <!-- MAIN -->
 <div id="main">
@@ -165,8 +183,8 @@
     <span class="total-badge sync-badge map-sync-status" id="sync-status">กำลังเชื่อมต่อ...</span>
     <div class="map-tools-panel" id="map-tools-panel">
       <div class="map-tools-actions">
-        <button class="map-tool-btn" id="legend-toggle" type="button">Legend</button>
-        <button class="map-tool-btn" id="fit-bounds-btn" type="button">Fit Bounds</button>
+        <button class="map-tool-btn" id="legend-toggle" type="button">คำอธิบาย</button>
+        <button class="map-tool-btn" id="fit-bounds-btn" type="button">ดูทั้งหมด</button>
         <button class="map-tool-btn" id="measure-distance-btn" type="button" aria-pressed="false" title="คลิกบนแผนที่เพื่อวัดระยะ">วัดระยะ</button>
       </div>
       <div class="measure-status" id="measure-status" role="status" aria-live="polite" hidden></div>
@@ -188,32 +206,28 @@
             <span class="legend-name"><span class="legend-pin" style="--legend-color:#ef4444"></span>ปิดถาวร</span>
             <span class="legend-count" id="legend-closed">0</span>
           </div>
-          <button class="layer-toggle" type="button" data-status-layer="Permission Confirmed" style="--legend-color:#22c55e"><span><span class="layer-toggle-dot"></span> Permission Confirmed</span><span class="layer-state">แสดง</span></button>
-          <button class="layer-toggle" type="button" data-status-layer="MOU" style="--legend-color:#a855f7"><span><span class="layer-toggle-dot"></span> MOU</span><span class="layer-state">แสดง</span></button>
-          <button class="layer-toggle" type="button" data-status-layer="Check Permission" style="--legend-color:#f59e0b"><span><span class="layer-toggle-dot"></span> Check Permission</span><span class="layer-state">แสดง</span></button>
-          <button class="layer-toggle" type="button" data-status-layer="อาคารปิดถาวร" style="--legend-color:#ef4444"><span><span class="layer-toggle-dot"></span> อาคารปิดถาวร</span><span class="layer-state">แสดง</span></button>
         </div>
       </div>
     </div>
 
     <!-- STATS OVERLAY -->
     <div id="statsbar">
-      <div class="stat-card">
+      <button class="stat-card" type="button" data-quick-status="Permission Confirmed" aria-pressed="false">
         <div class="sv sv-green" id="st-confirmed">0</div>
-        <div class="sl">Confirmed</div>
-      </div>
-      <div class="stat-card">
+        <div class="sl">ยืนยันแล้ว</div>
+      </button>
+      <button class="stat-card" type="button" data-quick-status="MOU" aria-pressed="false">
         <div class="sv sv-purple" id="st-mou">0</div>
         <div class="sl">MOU</div>
-      </div>
-      <div class="stat-card">
+      </button>
+      <button class="stat-card" type="button" data-quick-status="Check Permission" aria-pressed="false">
         <div class="sv sv-yellow" id="st-check">0</div>
-        <div class="sl">Check</div>
-      </div>
-      <div class="stat-card">
+        <div class="sl">รอตรวจสอบ</div>
+      </button>
+      <button class="stat-card" type="button" data-quick-status="อาคารปิดถาวร" aria-pressed="false">
         <div class="sv sv-red" id="st-closed">0</div>
-        <div class="sl">Closed</div>
-      </div>
+        <div class="sl">ปิดถาวร</div>
+      </button>
     </div>
 
     <!-- HOVER TOOLTIP -->
@@ -226,23 +240,35 @@
     <!-- DETAIL DRAWER -->
     <div id="drawer-overlay"></div>
 <div id="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="d-title" aria-hidden="true">
+      <div class="drawer-drag-handle" aria-hidden="true"></div>
       <div id="drawer-header">
         <div class="d-title" id="d-title">—</div>
         <div class="d-eng" id="d-eng"></div>
         <div class="d-tags" id="d-tags"></div>
         <button id="drawer-close" title="ปิด"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
       </div>
+      <div id="drawer-quick-summary" aria-label="สรุปข้อมูลอาคาร">
+        <div><span>สถานะ</span><strong id="drawer-summary-status">—</strong></div>
+        <div><span>พื้นที่</span><strong id="drawer-summary-area">—</strong></div>
+        <div><span>จังหวัด</span><strong id="drawer-summary-province">—</strong></div>
+        <div><span>ข้อมูลล่าสุด</span><strong id="drawer-summary-updated">—</strong></div>
+      </div>
       <div id="drawer-body">
         <div class="drawer-tabs" id="drawer-tabs" role="tablist" aria-label="รายละเอียดอาคาร">
-          <button class="dtab active" id="drawer-tab-general" type="button" role="tab" aria-selected="true" aria-controls="tab-general" data-tab="general">ทั่วไป</button>
-          <button class="dtab" id="drawer-tab-contact" type="button" role="tab" aria-selected="false" aria-controls="tab-contact" data-tab="contact">ติดต่อ</button>
-          <button class="dtab" id="drawer-tab-fee" type="button" role="tab" aria-selected="false" aria-controls="tab-fee" data-tab="fee">ค่าธรรมเนียม</button>
-          <button class="dtab role-hidden" id="drawer-tab-documents" type="button" role="tab" aria-selected="false" aria-controls="tab-documents" data-tab="documents">เอกสาร</button>
+          <button class="dtab active" id="drawer-tab-general" type="button" role="tab" aria-selected="true" aria-controls="tab-general" data-tab="general">ภาพรวม</button>
+          <button class="dtab" id="drawer-tab-contact" type="button" role="tab" aria-selected="false" aria-controls="tab-contact" data-tab="contact">ผู้ติดต่อ</button>
+          <button class="dtab" id="drawer-tab-fee" type="button" role="tab" aria-selected="false" aria-controls="tab-fee" data-tab="fee">ค่าใช้จ่าย</button>
+          <button class="dtab role-hidden" id="drawer-tab-documents" type="button" role="tab" aria-selected="false" aria-controls="tab-documents" data-tab="documents">เอกสาร <span id="drawer-doc-count" class="drawer-tab-count">0</span></button>
         </div>
         <div class="tab-panel active" id="tab-general" role="tabpanel" aria-labelledby="drawer-tab-general"></div>
         <div class="tab-panel" id="tab-contact" role="tabpanel" aria-labelledby="drawer-tab-contact" hidden></div>
         <div class="tab-panel" id="tab-fee" role="tabpanel" aria-labelledby="drawer-tab-fee" hidden></div>
         <div class="tab-panel role-hidden" id="tab-documents" role="tabpanel" aria-labelledby="drawer-tab-documents" hidden></div>
+      </div>
+      <div id="drawer-actions">
+        <button id="drawer-edit-btn" class="drawer-action secondary auth-only-admin" type="button">แก้ไขข้อมูล</button>
+        <a id="drawer-map-btn" class="drawer-action secondary" target="_blank" rel="noopener">เปิดในแผนที่</a>
+        <button id="drawer-quotation-btn" class="drawer-action primary" type="button">ประเมินราคาเบื้องต้น</button>
       </div>
     </div>
   </div>
@@ -250,7 +276,7 @@
   <!-- SIDEBAR -->
   <div id="sidebar">
     <div id="sidebar-header">
-      <div><span class="sidebar-kicker">BUILDING INDEX</span><h2>รายการอาคาร</h2></div>
+      <div><span class="sidebar-kicker">รายการข้อมูล</span><h2>รายการอาคาร</h2></div>
       <span id="sb-count"></span>
     </div>
     <div id="sidebar-list"></div>
@@ -273,29 +299,42 @@
     </div>
     <!-- FORM PANEL -->
     <div id="quotation-form-panel" role="tabpanel" aria-labelledby="quotation-tab-form">
-      <h2 id="quotation-title"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l2 2v3H7V5l2-2Z"/><path d="M7 8h10v13H7z"/><path d="M9 13h6"/><path d="M9 17h6"/></svg> สร้างใบประเมินราคาเบื้องต้น</h2>
+      <div class="quotation-workflow-header">
+        <div><span class="quotation-kicker">แบบประเมินก่อนสำรวจหน้างาน</span><h2 id="quotation-title"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l2 2v3H7V5l2-2Z"/><path d="M7 8h10v13H7z"/><path d="M9 13h6"/><path d="M9 17h6"/></svg> สร้างใบประเมินราคาเบื้องต้น</h2></div>
+        <div class="quotation-meta-actions"><span id="quotation-version-badge">ฉบับที่ 1</span><button id="quotation-header-close" type="button" aria-label="ปิดใบประเมิน"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+      </div>
+      <nav class="quotation-stepper" aria-label="ขั้นตอนสร้างใบประเมิน">
+        <button type="button" class="active" data-quotation-step-target="1" aria-current="step"><span>1</span><strong>ลูกค้า</strong></button>
+        <button type="button" data-quotation-step-target="2"><span>2</span><strong>เส้นทางสาย</strong></button>
+        <button type="button" data-quotation-step-target="3"><span>3</span><strong>เงื่อนไข</strong></button>
+        <button type="button" data-quotation-step-target="4"><span>4</span><strong>ตรวจสอบราคา</strong></button>
+      </nav>
+      <div class="quotation-draft-toolbar"><span id="quotation-draft-status">ยังไม่ได้บันทึกร่าง</span><div><select id="quotation-draft-history" aria-label="ประวัติร่าง"><option value="">ร่างล่าสุด</option></select><button id="quotation-load-draft-btn" type="button">เรียกคืนร่าง</button><button id="quotation-save-draft-btn" type="button">บันทึกร่าง</button></div></div>
       
       <div id="quotation-stale-banner" class="quotation-stale-banner" hidden role="status">
         ข้อมูลมีการเปลี่ยนแปลง — กรุณากดคำนวณใหม่ก่อนส่งออก
       </div>
       <div id="quotation-message" role="status" aria-live="polite"></div>
       
+      <section class="quotation-step-panel active" data-quotation-step="1">
       <div id="quotation-building-info" style="display:none; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:12px;">
         <div style="font-weight:700; color:var(--accent); margin-bottom:4px; display:flex; align-items:center; gap:6px;"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16"/><path d="M16 8h2a2 2 0 0 1 2 2v11"/><path d="M8 7h4"/><path d="M8 11h4"/><path d="M8 15h4"/><path d="M3 21h18"/></svg> อาคารที่เลือก</div>
         <div id="quotation-building-name" style="color:var(--text); font-weight:600;"></div>
-        <div id="quotation-calculation-profile" style="color:var(--muted); margin-top:4px; line-height:1.5;"></div>
+        <details class="quotation-system-profile"><summary>ดูข้อมูลที่ระบบใช้คำนวณ</summary><div id="quotation-calculation-profile"></div></details>
       </div>
 
       <div class="quotation-form-group">
         <label for="quotation-customer">ชื่อลูกค้า *</label>
         <input type="text" id="quotation-customer" placeholder="กรอกชื่อลูกค้า">
       </div>
-
       <div class="quotation-form-group">
         <label for="quotation-cust-floor">ชั้นที่ลูกค้าอยู่ *</label>
         <input type="text" id="quotation-cust-floor" placeholder="เช่น 20, B1, G" inputmode="text" autocomplete="off">
         <small class="quotation-field-hint">รองรับชั้นบนดิน (20), ชั้นใต้ดิน (B1, B2) และชั้น G</small>
       </div>
+      </section>
+
+      <section class="quotation-step-panel" data-quotation-step="2" hidden>
 
       <!-- WM Point selector (มี WM ในอาคาร) -->
       <div id="quotation-wm-group" class="quotation-form-group" style="display:none;">
@@ -312,12 +351,14 @@
       </div>
 
       <div class="quotation-form-group">
-        <label for="quotation-hwire">ระยะสายแนวนอน Horizontal (เมตร) *</label>
+        <label for="quotation-hwire">ระยะสายแนวนอน (เมตร) *</label>
         <input type="number" id="quotation-hwire" placeholder="เช่น 30" min="0" step="0.1" value="">
         <small id="quotation-hwire-rate" style="color:var(--muted);font-size:11px;margin-top:3px;display:block;"></small>
         <small id="quotation-hwire-warning" class="quotation-hwire-warning" hidden></small>
       </div>
+      </section>
 
+      <section class="quotation-step-panel" data-quotation-step="3" hidden>
       <div class="quotation-form-group">
         <label for="quotation-remark">หมายเหตุ (แสดงบนใบประเมิน)</label>
         <textarea id="quotation-remark" rows="2" placeholder="เงื่อนไขพิเศษ, ข้อยกเว้น, หมายเหตุถึงลูกค้า"></textarea>
@@ -355,7 +396,9 @@
         </div>
         <small id="quotation-revenue-hint" style="color:var(--text2);font-size:11px;line-height:1.6;display:block;"></small>
       </div>
+      </section>
 
+      <section class="quotation-step-panel" data-quotation-step="4" hidden>
       <!-- Summary box: แสดงการคำนวณระยะสาย -->
       <div id="quotation-distance-summary" style="display:none; background:var(--surface3); border:1px solid var(--border2); border-radius:8px; padding:10px 14px; margin-bottom:4px; font-size:12px; line-height:1.8;">
         <div style="font-weight:700; color:var(--accent); margin-bottom:4px; display:flex; align-items:center; gap:6px;"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 17 17 4l3 3L7 20l-3-3Z"/><path d="m14 7 3 3"/><path d="m11 10 2 2"/><path d="m8 13 3 3"/></svg> สรุประยะสาย</div>
@@ -371,7 +414,7 @@
       
       <div class="quotation-calc-display">
         <div class="quotation-calc-section">
-          <span>ต้นทุนติดตั้ง (CAPEX)</span>
+          <span>ต้นทุนติดตั้งครั้งแรก (CAPEX)</span>
           <span id="quotation-installation-subtotal">-</span>
         </div>
         <div class="quotation-calc-row">
@@ -399,18 +442,22 @@
         <div id="quotation-revenue-share-summary"></div>
         
         <div class="quotation-total-row">
-          <span class="quotation-total-label" id="quotation-total-label">ยอดรวมที่ต้องชำระ</span>
+          <span class="quotation-total-label" id="quotation-total-label">ราคาประเมินรวม</span>
           <span class="quotation-total-value" id="quotation-total-cost">-</span>
         </div>
       </div>
       
-      <div class="quotation-buttons">
-        <button class="quotation-btn quotation-btn-primary" id="quotation-calculate-btn" type="button"><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 11h.01"/><path d="M12 11h.01"/><path d="M16 11h.01"/><path d="M8 15h.01"/><path d="M12 15h.01"/><path d="M16 15h.01"/></svg>คำนวณ</span></button>
-        <button class="quotation-btn quotation-btn-warning" id="quotation-reset-btn" type="button"><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v6h6"/></svg>รีเซ็ต</span></button>
-      </div>
       <button class="quotation-btn quotation-btn-ghost" id="quotation-copy-btn" type="button" style="width:100%;margin-top:10px;" disabled><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>คัดลอกสรุป</span></button>
-      
-      <button class="quotation-close-btn" id="quotation-close-btn" type="button" style="width: 100%; margin-top: 15px;">ปิด</button>
+      </section>
+      <div class="quotation-sticky-actions">
+        <button class="quotation-btn quotation-reset-link" id="quotation-reset-btn" type="button">ล้างข้อมูล</button>
+        <span class="quotation-action-spacer" aria-hidden="true"></span>
+        <button class="quotation-btn quotation-btn-ghost" id="quotation-back-btn" type="button">ย้อนกลับ</button>
+        <button class="quotation-btn quotation-btn-secondary" id="quotation-next-btn" type="button">ถัดไป</button>
+        <button class="quotation-btn quotation-btn-primary" id="quotation-calculate-btn" type="button"><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 11h.01"/><path d="M12 11h.01"/><path d="M16 11h.01"/><path d="M8 15h.01"/><path d="M12 15h.01"/><path d="M16 15h.01"/></svg>คำนวณราคา</span></button>
+        <button class="quotation-btn quotation-btn-ghost" id="quotation-go-preview-btn" type="button">ดูตัวอย่าง</button>
+      </div>
+      <button class="quotation-close-btn" id="quotation-close-btn" type="button">ปิด</button>
     </div>
     
     <!-- PREVIEW PANEL -->
@@ -464,6 +511,12 @@
           <h3>หมายเหตุ</h3>
           <p id="prev-remark">-</p>
         </div>
+        <div class="quotation-preview-highlights">
+          <div><span>ระยะสายรวม</span><strong id="prev-highlight-distance">-</strong></div>
+          <div><span>ติดตั้งครั้งแรก</span><strong id="prev-highlight-capex">-</strong></div>
+          <div><span>รายเดือน</span><strong id="prev-highlight-monthly">-</strong></div>
+          <div class="primary"><span>ราคาประเมินรวม</span><strong id="prev-highlight-total">-</strong></div>
+        </div>
         
         <table class="quotation-preview-table">
           <thead>
@@ -514,7 +567,7 @@
           <div id="prev-cost-breakdown"></div>
           <div id="prev-revenue-share-summary"></div>
           <div class="quotation-summary-total">
-            <span id="prev-total-label">ยอดรวมที่ต้องชำระ</span>
+            <span id="prev-total-label">ราคาประเมินรวม</span>
             <span id="prev-total">-</span>
           </div>
         </div>
@@ -526,10 +579,10 @@
       </div>
       
       <div class="quotation-export-buttons">
-        <button class="quotation-btn quotation-btn-secondary" id="quotation-pdf-btn" type="button" disabled><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>PDF</span></button>
-        <button class="quotation-btn quotation-btn-warning" id="quotation-image-btn" type="button" disabled><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="10" r="1.5"/><path d="m21 15-5-5L5 19"/></svg>Image</span></button>
-        <button class="quotation-btn quotation-btn-ghost" id="quotation-print-btn" type="button" disabled><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>Print</span></button>
-        <button class="quotation-btn quotation-btn-ghost" id="quotation-copy-preview-btn" type="button" disabled><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</span></button>
+        <button class="quotation-btn quotation-btn-secondary" id="quotation-pdf-btn" type="button" disabled title="กรุณาคำนวณราคาก่อน"><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>ดาวน์โหลด PDF</span></button>
+        <button class="quotation-btn quotation-btn-ghost" id="quotation-image-btn" type="button" disabled title="กรุณาคำนวณราคาก่อน"><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="10" r="1.5"/><path d="m21 15-5-5L5 19"/></svg>ดาวน์โหลดรูปภาพ</span></button>
+        <button class="quotation-btn quotation-btn-ghost" id="quotation-print-btn" type="button" disabled title="กรุณาคำนวณราคาก่อน"><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>พิมพ์</span></button>
+        <button class="quotation-btn quotation-btn-ghost" id="quotation-copy-preview-btn" type="button" disabled title="กรุณาคำนวณราคาก่อน"><span class="icon-label"><svg class="svg-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>คัดลอกสรุป</span></button>
       </div>
       <div id="quotation-export-message" role="status" aria-live="polite"></div>
     </div>
@@ -567,6 +620,13 @@
         <label for="user-display-name">ชื่อที่แสดง</label>
         <input id="user-display-name" name="display_name" type="text" autocomplete="off" placeholder="เช่น Sale Team">
       </div>
+      <label class="user-upload-permission">
+        <input id="user-can-upload-documents" name="can_upload_documents" type="checkbox">
+        <span>
+          <strong>อนุญาตให้เพิ่มเอกสาร</strong>
+          <small>ผู้ใช้ที่เปิดสิทธิ์จะสามารถอัปโหลดไฟล์เข้าโฟลเดอร์อาคารได้</small>
+        </span>
+      </label>
       <div class="user-form-actions">
         <button class="user-admin-btn primary" type="submit">บันทึกผู้ใช้</button>
         <button class="user-admin-btn" id="user-form-reset-btn" type="button">ล้างฟอร์ม</button>
@@ -586,6 +646,7 @@
             <th>ID / Email</th>
             <th>Role</th>
             <th>ชื่อ</th>
+            <th>เพิ่มเอกสาร</th>
             <th style="text-align:right;">จัดการ</th>
           </tr>
         </thead>
@@ -660,6 +721,33 @@
         </div>
       </div>
     </form>
+  </div>
+</div>
+
+<div id="app-update-modal" role="dialog" aria-modal="true" aria-labelledby="app-update-title" aria-hidden="true">
+  <div class="app-update-card">
+    <div class="app-update-visual" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/><path d="M3 12A9 9 0 0 1 18.5 5.8L21 8"/><path d="M21 3v5h-5"/></svg>
+    </div>
+    <div class="app-update-content">
+      <span class="app-update-kicker">Permission Next Desktop</span>
+      <h3 id="app-update-title">อัปเดตโปรแกรม</h3>
+      <p id="app-update-status" role="status" aria-live="polite">กำลังตรวจสอบสถานะ...</p>
+      <div class="app-update-versions">
+        <div><span>เวอร์ชันปัจจุบัน</span><strong id="app-current-version">-</strong></div>
+        <div id="app-new-version-wrap" hidden><span>เวอร์ชันใหม่</span><strong id="app-new-version">-</strong></div>
+      </div>
+      <div id="app-update-progress" class="app-update-progress" hidden>
+        <div><span id="app-update-progress-label">กำลังดาวน์โหลด</span><strong id="app-update-progress-value">0%</strong></div>
+        <progress id="app-update-progress-bar" max="100" value="0">0%</progress>
+      </div>
+      <p class="app-update-note">หลังดาวน์โหลดเสร็จ คุณสามารถติดตั้งทันที หรือปิดโปรแกรมเพื่อติดตั้งอัตโนมัติ</p>
+      <div class="app-update-actions">
+        <button id="app-update-close-btn" class="app-update-btn secondary" type="button">ไว้ภายหลัง</button>
+        <button id="app-update-check-btn" class="app-update-btn secondary" type="button">ตรวจสอบอีกครั้ง</button>
+        <button id="app-update-install-btn" class="app-update-btn primary" type="button" hidden>รีสตาร์ตและติดตั้ง</button>
+      </div>
+    </div>
   </div>
 </div>
 

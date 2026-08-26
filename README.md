@@ -2,6 +2,44 @@
 
 Static dashboard for Cloudflare Pages.
 
+## Windows Desktop
+
+The desktop edition uses Electron and starts its local NAS bridge on a free loopback port assigned by Windows.
+Only one app instance runs at a time, and the window opens after the bridge is ready.
+Building and user data are synchronized through Firestore snapshot listeners. Cached data
+remains available during a temporary disconnect and the listener reconnects automatically.
+
+```powershell
+npm test
+npm run dist -- https://updates.company.local/permission-next/
+```
+
+The primary Windows build is a per-user NSIS installer in `dist-installer`. Only Thai and English Electron
+locales are packaged to keep the delivery smaller. The NAS folder index is loaded lazily when
+a user opens the Documents tab, so normal startup does not scan the shared drive. A fallback
+portable executable can still be built with `npm run dist:portable`; portable builds do not use
+the automatic updater.
+
+## Desktop Updates
+
+The installer build uses `electron-updater` with a generic HTTP(S) release server. Pass the
+release-folder URL as the first argument to the build command, or set
+`PERMISSION_NEXT_UPDATE_URL` before running `npm run dist`. The URL is written into the packaged
+installer configuration and is not requested from end users.
+
+Each release must increase the `version` in `package.json`. After building, copy these generated
+files from `dist-installer` to the same update-server folder:
+
+- `latest.yml`
+- `Permission_Next_Setup_v<version>.exe`
+- `Permission_Next_Setup_v<version>.exe.blockmap`
+
+Installed clients check for updates shortly after launch. New releases download in the
+background; users can monitor progress from **เมนูบัญชี > อัปเดตโปรแกรม** and choose
+**รีสตาร์ตและติดตั้ง** when ready. A downloaded update is also installed when the app exits.
+Use HTTPS and code-sign production installers. Restrict write access to the release folder so
+only the release administrator can replace update metadata or installers.
+
 ## Deploy to Cloudflare Pages
 
 1. Push this folder to `Kobpatme/Permission_Next.git`.
@@ -38,7 +76,7 @@ The building detail dialog includes a Documents tab for `admin` and `permission`
 
 `P:\BBG\Outside Plant&Coordination\!!!_Data Base Building Drawing`
 
-Supported categories are DWG (`.dwg`), PDF (`.pdf`), and images (`.jpg`, `.jpeg`, `.png`, `.webp`, `.gif`, `.tif`, `.tiff`, `.bmp`, `.heic`, `.heif`). The document feature does not read from or write to Firestore. It searches automatically when a building is opened and keeps the result only in the current browser page's memory. File categories start collapsed and their rows are created only when expanded, keeping large building folders responsive. Folder names and NAS paths are not sent to the browser. Each matched file is exposed through a short-lived opaque download token restricted to supported files inside the configured NAS root.
+Supported categories are DWG (`.dwg`), PDF (`.pdf`), and images (`.jpg`, `.jpeg`, `.png`, `.webp`, `.gif`, `.tif`, `.tiff`, `.bmp`, `.heic`, `.heif`). The document feature does not read from or write to Firestore. It searches automatically when a building is opened and keeps the result only in the current browser page's memory. File categories start collapsed and their rows are created only when expanded, keeping large building folders responsive. Folder names and NAS paths are not sent to the browser. Each matched file is exposed through a short-lived opaque download token restricted to supported files inside the configured NAS root. Users with the per-account `can_upload_documents` permission can add files (up to 100 MB each) to the matched building folder; existing files are never overwritten.
 
 Run locally on a Windows machine that has the team drive mapped as `P:`:
 
@@ -46,7 +84,9 @@ Run locally on a Windows machine that has the team drive mapped as `P:`:
 node dev-server.js
 ```
 
-Then open `http://127.0.0.1:8766`. Opening a building automatically asks the local NAS bridge to locate matching files by Thai/English name and Area. The UI exposes only file information, Download links, and inline Preview links for PDFs and images; it does not expose folder selection, folder paths, or path-copy controls.
+Then open the loopback URL printed by the server (normally `http://127.0.0.1:8766` when run manually). Opening a building automatically asks the local NAS bridge to locate matching files by Thai/English name and Area. The UI exposes only file information, Download links, and inline Preview links for PDFs and images; it does not expose folder selection, folder paths, or path-copy controls.
+
+The Admin user management dialog controls the per-account `can_upload_documents` permission. The embedded Electron NAS bridge requires a per-launch random bearer token, serves only an explicit web-file allowlist, and enables uploads only for the desktop process. The temporary LAN-share script also generates a random access link, but starts in read-only mode. Do not forward that link outside the trusted network.
 
 ### Use NAS documents from the deployed Cloudflare Pages site
 
