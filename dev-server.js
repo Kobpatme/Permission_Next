@@ -659,24 +659,8 @@ function serveStatic(res, requestUrl) {
       'X-Frame-Options': 'DENY',
       'Referrer-Policy': 'no-referrer',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
-      'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://server.arcgisonline.com https://services.arcgisonline.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
+      'Content-Security-Policy': "default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://*.tile.openstreetmap.org https://server.arcgisonline.com https://services.arcgisonline.com; connect-src 'self' https://www.gstatic.com https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com; font-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
     };
-    if (normalizedPublicPath === 'assets/vendor/firebase/firebase-firestore.js') {
-      fs.readFile(filePath, 'utf8', (readError, source) => {
-        if (readError) {
-          res.writeHead(500);
-          res.end('Unable to load Firebase module');
-          return;
-        }
-        const localSource = source.replace(
-          'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js',
-          './firebase-app.js'
-        );
-        res.writeHead(200, responseHeaders);
-        res.end(localSource);
-      });
-      return;
-    }
     res.writeHead(200, responseHeaders);
     fs.createReadStream(filePath).pipe(res);
   });

@@ -1,4 +1,7 @@
-  import { initializeApp } from "./assets/vendor/firebase/firebase-app.js";
+  // firebase-firestore.js is the official Firebase ESM build and imports this
+  // same module URL internally.  Keep both imports on one module instance so
+  // Firestore can register its component with the app container.
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
   import {
     initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
     collection, doc, setDoc, deleteDoc, onSnapshot, runTransaction,
