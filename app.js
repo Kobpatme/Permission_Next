@@ -1411,8 +1411,53 @@ const MAX_BUILDING_DOCUMENT_FILES = 1500;
 const MAX_BUILDING_DOCUMENT_UPLOAD_BYTES = 100 * 1024 * 1024;
 const DEFAULT_LOCAL_NAS_BRIDGE_URL = 'http://127.0.0.1:8766';
 const NAS_BRIDGE_PERMISSION_TIMEOUT_MS = 30000;
+const NAS_DOCUMENT_REQUEST_TIMEOUT_MS = 60000;
+const NAS_UPLOAD_REQUEST_TIMEOUT_MS = 120000;
 const buildingDocumentsCache = new Map();
+const buildingDocumentRequests = new Map();
 let nasBridgeBasePromise = null;
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 30000, timeoutMessage = 'การเชื่อมต่อใช้เวลานานเกินไป') {
+  const controller = new AbortController();
+  const externalSignal = options.signal;
+  let timedOut = false;
+  const abortFromExternalSignal = () => controller.abort();
+  if (externalSignal?.aborted) controller.abort();
+  else externalSignal?.addEventListener('abort', abortFromExternalSignal, { once: true });
+  const timeoutId = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (timedOut) {
+      const timeoutError = new Error(timeoutMessage);
+      timeoutError.code = 'REQUEST_TIMEOUT';
+      throw timeoutError;
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+    externalSignal?.removeEventListener('abort', abortFromExternalSignal);
+  }
+}
+
+function setFormSubmitBusy(form, busy, busyText = 'กำลังบันทึก...') {
+  if (!form) return;
+  form.dataset.busy = busy ? 'true' : 'false';
+  const submitButton = form.querySelector('[type="submit"]');
+  if (!submitButton) return;
+  if (busy) {
+    submitButton.dataset.idleText = submitButton.textContent;
+    submitButton.disabled = true;
+    submitButton.textContent = busyText;
+  } else {
+    submitButton.disabled = false;
+    submitButton.textContent = submitButton.dataset.idleText || submitButton.textContent;
+    delete submitButton.dataset.idleText;
+  }
+}
 
 function normalizeNasBridgeBase(value) {
   return String(value || '').trim().replace(/\/$/, '');
@@ -1553,6 +1598,8 @@ function renderBuildingDocuments(record, options = {}) {
         <span>${esc(options.error)}</span>
         <button class="building-doc-connect" type="button" data-document-retry>ลองเชื่อมต่ออีกครั้ง</button>
       </div>`
+    : options.syncing
+      ? '<div class="building-doc-status">กำลังอัปเดตรายการเอกสาร...</div>'
     : options.message
       ? `<div class="building-doc-status success">${esc(options.message)}</div>`
       : '';
@@ -1589,7 +1636,7 @@ function renderBuildingDocuments(record, options = {}) {
   panel.innerHTML = `
     <div class="building-doc-toolbar">
       <div class="section-head">เอกสาร</div>
-      <button id="building-doc-refresh-btn" class="building-doc-refresh-btn" type="button" title="ค้นหาเอกสารใหม่" aria-label="ค้นหาเอกสารใหม่">
+      <button id="building-doc-refresh-btn" class="building-doc-refresh-btn" type="button" title="ค้นหาเอกสารใหม่" aria-label="ค้นหาเอกสารใหม่" ${options.syncing ? 'disabled' : ''}>
         ${svgIcon('reset')}
       </button>
     </div>
@@ -1641,9 +1688,13 @@ async function loadBuildingDocuments(record) {
   if (!canViewBuildingDocuments()) return;
   const key = buildingDocumentKey(record);
   if (!key) return;
+  buildingDocumentRequests.get(key)?.abort();
+  const controller = new AbortController();
+  buildingDocumentRequests.set(key, controller);
   try {
-    await syncBuildingDocuments(record);
+    await syncBuildingDocuments(record, { signal: controller.signal });
   } catch (err) {
+    if (err?.name === 'AbortError') return;
     if (String(selectedId) === String(record.id)) {
       renderBuildingDocuments(record, {
         data: buildingDocumentsCache.get(key),
@@ -1656,10 +1707,12 @@ async function loadBuildingDocuments(record) {
         error: 'ค้นหารายการเอกสารอัตโนมัติไม่สำเร็จ: ' + err.message
       });
     }
+  } finally {
+    if (buildingDocumentRequests.get(key) === controller) buildingDocumentRequests.delete(key);
   }
 }
 
-async function discoverBuildingDocumentsFromNas(record) {
+async function discoverBuildingDocumentsFromNas(record, signal) {
   const bridgeBase = await getNasBridgeBase();
   if (!bridgeBase) return null;
   const query = new URLSearchParams({
@@ -1669,13 +1722,15 @@ async function discoverBuildingDocumentsFromNas(record) {
   });
   let response;
   try {
-    response = await fetch(bridgeBase + '/api/nas/building-documents?' + query.toString(), {
+    response = await fetchWithTimeout(bridgeBase + '/api/nas/building-documents?' + query.toString(), {
       cache: 'no-store',
       mode: 'cors',
       targetAddressSpace: 'loopback',
-      headers: bridgeRequestHeaders()
-    });
-  } catch {
+      headers: bridgeRequestHeaders(),
+      signal
+    }, NAS_DOCUMENT_REQUEST_TIMEOUT_MS, 'NAS ใช้เวลาค้นหาเอกสารนานเกิน 60 วินาที กรุณาตรวจสอบการเชื่อมต่อแล้วลองใหม่');
+  } catch (error) {
+    if (error?.name === 'AbortError' || error?.code === 'REQUEST_TIMEOUT') throw error;
     return null;
   }
   if (response.headers.get('X-Permission-NAS-Bridge') !== '1') return null;
@@ -1703,7 +1758,7 @@ async function uploadBuildingDocumentToNas(record, file) {
     area: record?.area || '',
     fileName: file.name
   });
-  const response = await fetch(bridgeBase + '/api/nas/building-documents/upload?' + query.toString(), {
+  const response = await fetchWithTimeout(bridgeBase + '/api/nas/building-documents/upload?' + query.toString(), {
     method: 'POST',
     cache: 'no-store',
     headers: bridgeRequestHeaders({
@@ -1712,7 +1767,7 @@ async function uploadBuildingDocumentToNas(record, file) {
       'X-Permission-Upload-User': currentUser?.email || ''
     }),
     body: file
-  });
+  }, NAS_UPLOAD_REQUEST_TIMEOUT_MS, `อัปโหลด ${file.name} ใช้เวลานานเกิน 2 นาที กรุณาตรวจสอบ NAS แล้วลองใหม่`);
   if (response.headers.get('X-Permission-NAS-Bridge') !== '1') {
     throw new Error('กรุณาเปิดระบบผ่าน local dev server เพื่อเพิ่มเอกสารลง NAS');
   }
@@ -1765,16 +1820,16 @@ async function uploadBuildingDocuments(record, inputOrFiles) {
 
   let uploadedCount = 0;
   const errors = [];
-  for (const file of validFiles) {
-    try {
-      await uploadBuildingDocumentToNas(record, file);
-      uploadedCount += 1;
-    } catch (err) {
-      errors.push(`${file.name}: ${err.message}`);
-    }
-  }
-
   try {
+    for (const file of validFiles) {
+      try {
+        await uploadBuildingDocumentToNas(record, file);
+        uploadedCount += 1;
+      } catch (err) {
+        errors.push(`${file.name}: ${err.message}`);
+      }
+    }
+
     await syncBuildingDocuments(record);
     if (errors.length) {
       renderBuildingDocuments(record, {
@@ -1787,6 +1842,11 @@ async function uploadBuildingDocuments(record, inputOrFiles) {
       data: buildingDocumentsCache.get(key),
       error: `เพิ่มไฟล์แล้ว แต่โหลดรายการล่าสุดไม่สำเร็จ: ${err.message}`
     });
+  } finally {
+    if (uploadButton) {
+      uploadButton.classList.remove('loading');
+      uploadButton.textContent = '+ เพิ่ม';
+    }
   }
 }
 
@@ -1801,7 +1861,7 @@ async function syncBuildingDocuments(record, options = {}) {
 
   let selected;
   try {
-    selected = await discoverBuildingDocumentsFromNas(record);
+    selected = await discoverBuildingDocumentsFromNas(record, options.signal);
   } catch (err) {
     if (err?.name === 'AbortError') {
       if (String(selectedId) === String(record.id)) renderBuildingDocuments(record, { data: currentData });
@@ -3583,6 +3643,7 @@ async function saveBuildingFromForm(form) {
 
   try {
     const boqProfile = buildBuildingBoqProfile(payload, existingRecord?.boq_profile);
+    setBuildingEditorMessage('กำลังบันทึกข้อมูล...');
     await window.FSDB.setDoc(recordId, stripInternalFields({
       ...payload,
       boq_profile: boqProfile,
@@ -5623,10 +5684,14 @@ document.addEventListener('DOMContentLoaded', function() {
   if (userAdminForm) {
     userAdminForm.addEventListener('submit', async function(e) {
       e.preventDefault();
+      if (userAdminForm.dataset.busy === 'true') return;
+      setFormSubmitBusy(userAdminForm, true, 'กำลังบันทึก...');
       try {
         await saveUserFromForm(userAdminForm);
       } catch (err) {
         setBoxMessage('user-admin-message', err.message || 'บันทึกผู้ใช้ไม่สำเร็จ');
+      } finally {
+        setFormSubmitBusy(userAdminForm, false);
       }
     });
   }
@@ -5634,11 +5699,15 @@ document.addEventListener('DOMContentLoaded', function() {
     userAdminList.addEventListener('click', async function(e) {
       const editBtn = e.target.closest('[data-user-edit]');
       const deleteBtn = e.target.closest('[data-user-delete]');
+      if (deleteBtn?.disabled) return;
+      if (deleteBtn) deleteBtn.disabled = true;
       try {
         if (editBtn) editUser(editBtn.dataset.userEdit);
         if (deleteBtn) await deleteUserAccount(deleteBtn.dataset.userDelete);
       } catch (err) {
         setBoxMessage('user-admin-message', err.message || 'จัดการผู้ใช้ไม่สำเร็จ');
+      } finally {
+        if (deleteBtn?.isConnected) deleteBtn.disabled = false;
       }
     });
   }
@@ -5662,8 +5731,14 @@ document.addEventListener('DOMContentLoaded', function() {
     buildingEditorCancelBtn.addEventListener('click', closeBuildingEditor);
   }
   if (buildingEditorDeleteBtn && buildingEditorForm) {
-    buildingEditorDeleteBtn.addEventListener('click', function() {
-      deleteBuildingFromForm(buildingEditorForm);
+    buildingEditorDeleteBtn.addEventListener('click', async function() {
+      if (buildingEditorDeleteBtn.disabled || buildingEditorForm.dataset.busy === 'true') return;
+      buildingEditorDeleteBtn.disabled = true;
+      try {
+        await deleteBuildingFromForm(buildingEditorForm);
+      } finally {
+        buildingEditorDeleteBtn.disabled = false;
+      }
     });
   }
   if (otherFeeAddBtn) {
@@ -5679,9 +5754,15 @@ document.addEventListener('DOMContentLoaded', function() {
       removeBtn.closest('.other-fee-row')?.remove();
       clearBuildingEditorInvalidState(buildingEditorForm);
     });
-    buildingEditorForm.addEventListener('submit', function(e) {
+    buildingEditorForm.addEventListener('submit', async function(e) {
       e.preventDefault();
-      saveBuildingFromForm(buildingEditorForm);
+      if (buildingEditorForm.dataset.busy === 'true') return;
+      setFormSubmitBusy(buildingEditorForm, true, 'กำลังบันทึก...');
+      try {
+        await saveBuildingFromForm(buildingEditorForm);
+      } finally {
+        setFormSubmitBusy(buildingEditorForm, false);
+      }
     });
     buildingEditorForm.addEventListener('input', function() {
       clearBuildingEditorInvalidState(buildingEditorForm);

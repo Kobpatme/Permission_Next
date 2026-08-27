@@ -1,6 +1,6 @@
 {
   "name": "permission-next",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Permission Next Desktop App",
   "main": "electron-main.js",
   "scripts": {
