@@ -1,7 +1,7 @@
 const { spawnSync } = require('child_process');
 const path = require('path');
 
-const DEFAULT_UPDATE_URL = 'https://github.com/Kobpatme/Permission_Next/releases/latest/download/';
+const DEFAULT_UPDATE_URL = 'https://github.com/Kobpatme/Permission_Next_Releases/releases/latest/download/';
 const rawUpdateUrl = process.argv[2] || process.env.PERMISSION_NEXT_UPDATE_URL || DEFAULT_UPDATE_URL;
 let updateUrl;
 
