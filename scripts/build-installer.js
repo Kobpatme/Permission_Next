@@ -1,7 +1,8 @@
 const { spawnSync } = require('child_process');
 const path = require('path');
 
-const rawUpdateUrl = process.argv[2] || process.env.PERMISSION_NEXT_UPDATE_URL || '';
+const DEFAULT_UPDATE_URL = 'https://github.com/Kobpatme/Permission_Next/releases/latest/download/';
+const rawUpdateUrl = process.argv[2] || process.env.PERMISSION_NEXT_UPDATE_URL || DEFAULT_UPDATE_URL;
 let updateUrl;
 
 try {
@@ -10,7 +11,7 @@ try {
 } catch {
   console.error(
     'กรุณาระบุ URL โฟลเดอร์อัปเดตก่อน build\n' +
-    'ตัวอย่าง: npm run dist -- https://updates.company.local/permission-next/'
+    `ค่าเริ่มต้นของโปรเจกต์คือ ${DEFAULT_UPDATE_URL}`
   );
   process.exit(1);
 }

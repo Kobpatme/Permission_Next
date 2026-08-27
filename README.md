@@ -11,7 +11,7 @@ remains available during a temporary disconnect and the listener reconnects auto
 
 ```powershell
 npm test
-npm run dist -- https://updates.company.local/permission-next/
+npm run dist
 ```
 
 The primary Windows build is a per-user NSIS installer in `dist-installer`. Only Thai and English Electron
@@ -22,13 +22,14 @@ the automatic updater.
 
 ## Desktop Updates
 
-The installer build uses `electron-updater` with a generic HTTP(S) release server. Pass the
-release-folder URL as the first argument to the build command, or set
-`PERMISSION_NEXT_UPDATE_URL` before running `npm run dist`. The URL is written into the packaged
-installer configuration and is not requested from end users.
+The installer build uses `electron-updater` with GitHub Releases at
+`https://github.com/Kobpatme/Permission_Next/releases/latest/download/` as its default generic
+release server. Pass another release-folder URL as the first argument to the build command, or set
+`PERMISSION_NEXT_UPDATE_URL` before running `npm run dist`, to override it. The URL is written into
+the packaged installer configuration and is not requested from end users.
 
-Each release must increase the `version` in `package.json`. After building, copy these generated
-files from `dist-installer` to the same update-server folder:
+Each release must increase the `version` in `package.json`. After building, upload these generated
+files from `dist-installer` to the matching GitHub Release:
 
 - `latest.yml`
 - `Permission_Next_Setup_v<version>.exe`
